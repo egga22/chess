@@ -9,6 +9,7 @@ const initialBoardSetup = [
 ];
 
 const chessboard = document.getElementById('chessboard');
+let currentPlayer = 'w'; // Start the game with white's turn
 console.log('Chessboard element:', chessboard);
 
 let selectedPiece = null;
