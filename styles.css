@@ -21,6 +21,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    position: relative;
 }
 
 .white {
@@ -32,6 +33,18 @@ body {
 }
 
 .piece {
-    width: 50px;
-    height: 50px;
+    width: 55px;
+    height: 55px;
+}
+
+.move-dot {
+    width: 15px;
+    height: 15px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
 }
