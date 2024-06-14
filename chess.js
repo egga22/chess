@@ -26,21 +26,25 @@ function getLegalMoves(piece, row, col) {
 
     switch (type) {
         case 'pawn':
-            const direction = (color === 'w') ? -1 : 1;
-            const startRow = (color === 'w') ? 6 : 1;
-            if (initialBoardSetup[row + direction][col] === null) {
-                moves.push([row + direction, col]);
-                if (row === startRow && initialBoardSetup[row + 2 * direction][col] === null) {
-                    moves.push([row + 2 * direction, col]);
-                }
+        const direction = (color === 'w') ? -1 : 1;
+        const startRow = (color === 'w') ? 6 : 1;
+
+        // Check forward movement
+        if (row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col] === null) {
+            moves.push([row + direction, col]);
+            if (row === startRow && initialBoardSetup[row + 2 * direction][col] === null) {
+                moves.push([row + 2 * direction, col]);
             }
-            if (col > 0 && initialBoardSetup[row + direction][col - 1] && initialBoardSetup[row + direction][col - 1].split('-')[1] !== color) {
-                moves.push([row + direction, col - 1]);
-            }
-            if (col < 7 && initialBoardSetup[row + direction][col + 1] && initialBoardSetup[row + direction][col + 1].split('-')[1] !== color) {
-                moves.push([row + direction, col + 1]);
-            }
-            break;
+        }
+
+        // Check captures
+        if (col > 0 && row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col - 1] && initialBoardSetup[row + direction][col - 1].split('-')[1] !== color) {
+            moves.push([row + direction, col - 1]);
+        }
+        if (col < 7 && row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col + 1] && initialBoardSetup[row + direction][col + 1].split('-')[1] !== color) {
+            moves.push([row + direction, col + 1]);
+        }
+        break;
         case 'rook':
             for (let i = row + 1; i < 8 && (!initialBoardSetup[i][col] || initialBoardSetup[i][col].split('-')[1] !== color); i++) {
                 moves.push([i, col]);
@@ -190,9 +194,11 @@ for (let row = 0; row < 8; row++) {
                 initialBoardSetup[oldRow][oldCol] = null;
                 selectedPiece.dataset.row = square.dataset.row;
                 selectedPiece.dataset.col = square.dataset.col;
+                square.innerHTML = '';  // Clear the square before appending the piece
                 square.appendChild(selectedPiece);
                 selectedPiece = null;
                 clearDots();
+                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w';
             }
         });
 
