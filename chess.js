@@ -28,7 +28,7 @@ function showLegalMoves(row, col) {
 
     legalMoves = potentialMoves.filter(move => {
         const [r, c] = move;
-        return r >= 0 && r < 8 && c >= 0 && c < 8 && (!initialBoardSetup[r][c] || initialBoardSetup[r][c][1] !== selectedPiece.color);
+        return r >= 0 && r < 8 && c >= 0 && c < 8 && (!initialBoardSetup[r][c] || initialBoardSetup[r][c][1] !== selectedPiece.dataset.piece.split('-')[1]);
     });
 
     legalMoves.forEach(move => {
