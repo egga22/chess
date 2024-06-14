@@ -17,6 +17,7 @@ for (let row = 0; row < 8; row++) {
             const piece = document.createElement('img');
             piece.src = `images/${initialBoardSetup[row][col]}.svg`;
             piece.className = 'piece';
+            piece.onerror = () => console.error(`Error loading image: ${piece.src}`);
             square.appendChild(piece);
         }
 
