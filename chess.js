@@ -29,15 +29,16 @@ function getLegalMoves(piece, row, col) {
             const direction = (color === 'w') ? -1 : 1;
             const startRow = (color === 'w') ? 6 : 1;
 
-            // Check forward movement
+            // Forward movement
             if (row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col] === null) {
                 moves.push([row + direction, col]);
+                // Check if it's the first move and the next two squares are clear
                 if (row === startRow && initialBoardSetup[row + 2 * direction][col] === null) {
                     moves.push([row + 2 * direction, col]);
                 }
             }
 
-            // Check captures
+            // Diagonal captures
             if (col > 0 && row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col - 1] && initialBoardSetup[row + direction][col - 1].split('-')[1] !== color) {
                 moves.push([row + direction, col - 1]);
             }
@@ -189,15 +190,21 @@ for (let row = 0; row < 8; row++) {
         square.addEventListener('click', () => {
             if (selectedPiece && legalMoves.some(move => move[0] == square.dataset.row && move[1] == square.dataset.col)) {
                 const [oldRow, oldCol] = [selectedPiece.dataset.row, selectedPiece.dataset.col];
+                // Clear the target square if there's a capture
+                if(initialBoardSetup[square.dataset.row][square.dataset.col] !== null) {
+                    square.innerHTML = '';  // Clear the square before moving the piece
+                }
                 initialBoardSetup[square.dataset.row][square.dataset.col] = initialBoardSetup[oldRow][oldCol];
                 initialBoardSetup[oldRow][oldCol] = null;
                 selectedPiece.dataset.row = square.dataset.row;
                 selectedPiece.dataset.col = square.dataset.col;
-                square.innerHTML = '';  // Clear the square before appending the piece
                 square.appendChild(selectedPiece);
                 selectedPiece = null;
                 clearDots();
                 currentPlayer = (currentPlayer === 'w') ? 'b' : 'w';
+            } else if (selectedPiece && square.contains(selectedPiece)) {
+                clearDots();
+                selectedPiece = null; // Deselect piece if clicked again
             }
         });
 
