@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const squares = [];
 
     const pieceImages = {
-        'r': 'rook-b.svg', 'n': 'knight-b.svg', 'b': 'bishop-b.svg', 'q': 'queen-b.svg', 'k': 'king-b.svg', 'p': 'pawn-b.svg',
-        'R': 'rook-w.svg', 'N': 'knight-w.svg', 'B': 'bishop-w.svg', 'Q': 'queen-w.svg', 'K': 'king-w.svg', 'P': 'pawn-w.svg'
+        'r': 'images/rook-b.svg', 'n': 'images/knight-b.svg', 'b': 'images/bishop-b.svg', 'q': 'images/queen-b.svg', 'k': 'images/king-b.svg', 'p': 'images/pawn-b.svg',
+        'R': 'images/rook-w.svg', 'N': 'images/knight-w.svg', 'B': 'images/bishop-w.svg', 'Q': 'images/queen-w.svg', 'K': 'images/king-w.svg', 'P': 'images/pawn-w.svg'
     };
 
     const initialBoardSetup = [
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (initialBoardSetup[i]) {
                 const piece = document.createElement('div');
                 piece.classList.add('piece');
-                piece.style.backgroundImage = `url('images/${pieceImages[initialBoardSetup[i]]}')`;
+                piece.style.backgroundImage = `url('${pieceImages[initialBoardSetup[i]]}')`;
                 square.appendChild(piece);
             }
             boardElement.appendChild(square);
