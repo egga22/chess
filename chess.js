@@ -19,17 +19,133 @@ function clearDots() {
     dots.forEach(dot => dot.remove());
 }
 
-function showLegalMoves(row, col) {
-    // Example: allow pieces to move one square in any direction (for demonstration purposes)
-    const potentialMoves = [
-        [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1],
-        [row - 1, col - 1], [row - 1, col + 1], [row + 1, col - 1], [row + 1, col + 1]
-    ];
+function getLegalMoves(piece, row, col) {
+    const type = piece.split('-')[0];
+    const color = piece.split('-')[1];
+    const moves = [];
 
-    legalMoves = potentialMoves.filter(move => {
-        const [r, c] = move;
-        return r >= 0 && r < 8 && c >= 0 && c < 8 && (!initialBoardSetup[r][c] || initialBoardSetup[r][c][1] !== selectedPiece.dataset.piece.split('-')[1]);
-    });
+    switch (type) {
+        case 'pawn':
+            const direction = (color === 'w') ? -1 : 1;
+            const startRow = (color === 'w') ? 6 : 1;
+            if (initialBoardSetup[row + direction][col] === null) {
+                moves.push([row + direction, col]);
+                if (row === startRow && initialBoardSetup[row + 2 * direction][col] === null) {
+                    moves.push([row + 2 * direction, col]);
+                }
+            }
+            if (col > 0 && initialBoardSetup[row + direction][col - 1] && initialBoardSetup[row + direction][col - 1].split('-')[1] !== color) {
+                moves.push([row + direction, col - 1]);
+            }
+            if (col < 7 && initialBoardSetup[row + direction][col + 1] && initialBoardSetup[row + direction][col + 1].split('-')[1] !== color) {
+                moves.push([row + direction, col + 1]);
+            }
+            break;
+        case 'rook':
+            for (let i = row + 1; i < 8 && (!initialBoardSetup[i][col] || initialBoardSetup[i][col].split('-')[1] !== color); i++) {
+                moves.push([i, col]);
+                if (initialBoardSetup[i][col]) break;
+            }
+            for (let i = row - 1; i >= 0 && (!initialBoardSetup[i][col] || initialBoardSetup[i][col].split('-')[1] !== color); i--) {
+                moves.push([i, col]);
+                if (initialBoardSetup[i][col]) break;
+            }
+            for (let i = col + 1; i < 8 && (!initialBoardSetup[row][i] || initialBoardSetup[row][i].split('-')[1] !== color); i++) {
+                moves.push([row, i]);
+                if (initialBoardSetup[row][i]) break;
+            }
+            for (let i = col - 1; i >= 0 && (!initialBoardSetup[row][i] || initialBoardSetup[row][i].split('-')[1] !== color); i--) {
+                moves.push([row, i]);
+                if (initialBoardSetup[row][i]) break;
+            }
+            break;
+        case 'knight':
+            const knightMoves = [
+                [row + 2, col + 1], [row + 2, col - 1], [row - 2, col + 1], [row - 2, col - 1],
+                [row + 1, col + 2], [row + 1, col - 2], [row - 1, col + 2], [row - 1, col - 2]
+            ];
+            knightMoves.forEach(move => {
+                const [r, c] = move;
+                if (r >= 0 && r < 8 && c >= 0 && c < 8 && (!initialBoardSetup[r][c] || initialBoardSetup[r][c].split('-')[1] !== color)) {
+                    moves.push([r, c]);
+                }
+            });
+            break;
+        case 'bishop':
+            for (let i = 1; row + i < 8 && col + i < 8 && (!initialBoardSetup[row + i][col + i] || initialBoardSetup[row + i][col + i].split('-')[1] !== color); i++) {
+                moves.push([row + i, col + i]);
+                if (initialBoardSetup[row + i][col + i]) break;
+            }
+            for (let i = 1; row - i >= 0 && col - i >= 0 && (!initialBoardSetup[row - i][col - i] || initialBoardSetup[row - i][col - i].split('-')[1] !== color); i++) {
+                moves.push([row - i, col - i]);
+                if (initialBoardSetup[row - i][col - i]) break;
+            }
+            for (let i = 1; row + i < 8 && col - i >= 0 && (!initialBoardSetup[row + i][col - i] || initialBoardSetup[row + i][col - i].split('-')[1] !== color); i++) {
+                moves.push([row + i, col - i]);
+                if (initialBoardSetup[row + i][col - i]) break;
+            }
+            for (let i = 1; row - i >= 0 && col + i < 8 && (!initialBoardSetup[row - i][col + i] || initialBoardSetup[row - i][col + i].split('-')[1] !== color); i++) {
+                moves.push([row - i, col + i]);
+                if (initialBoardSetup[row - i][col + i]) break;
+            }
+            break;
+        case 'queen':
+            // Combine rook and bishop moves
+            for (let i = row + 1; i < 8 && (!initialBoardSetup[i][col] || initialBoardSetup[i][col].split('-')[1] !== color); i++) {
+                moves.push([i, col]);
+                if (initialBoardSetup[i][col]) break;
+            }
+            for (let i = row - 1; i >= 0 && (!initialBoardSetup[i][col] || initialBoardSetup[i][col].split('-')[1] !== color); i--) {
+                moves.push([i, col]);
+                if (initialBoardSetup[i][col]) break;
+            }
+            for (let i = col + 1; i < 8 && (!initialBoardSetup[row][i] || initialBoardSetup[row][i].split('-')[1] !== color); i++) {
+                moves.push([row, i]);
+                if (initialBoardSetup[row][i]) break;
+            }
+            for (let i = col - 1; i >= 0 && (!initialBoardSetup[row][i] || initialBoardSetup[row][i].split('-')[1] !== color); i--) {
+                moves.push([row, i]);
+                if (initialBoardSetup[row][i]) break;
+            }
+            for (let i = 1; row + i < 8 && col + i < 8 && (!initialBoardSetup[row + i][col + i] || initialBoardSetup[row + i][col + i].split('-')[1] !== color); i++) {
+                moves.push([row + i, col + i]);
+                if (initialBoardSetup[row + i][col + i]) break;
+            }
+            for (let i = 1; row - i >= 0 && col - i >= 0 && (!initialBoardSetup
+
+[row - i][col - i] || initialBoardSetup[row - i][col - i].split('-')[1] !== color); i++) {
+                moves.push([row - i, col - i]);
+                if (initialBoardSetup[row - i][col - i]) break;
+            }
+            for (let i = 1; row + i < 8 && col - i >= 0 && (!initialBoardSetup[row + i][col - i] || initialBoardSetup[row + i][col - i].split('-')[1] !== color); i++) {
+                moves.push([row + i, col - i]);
+                if (initialBoardSetup[row + i][col - i]) break;
+            }
+            for (let i = 1; row - i >= 0 && col + i < 8 && (!initialBoardSetup[row - i][col + i] || initialBoardSetup[row - i][col + i].split('-')[1] !== color); i++) {
+                moves.push([row - i, col + i]);
+                if (initialBoardSetup[row - i][col + i]) break;
+            }
+            break;
+        case 'king':
+            const kingMoves = [
+                [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1],
+                [row - 1, col - 1], [row - 1, col + 1], [row + 1, col - 1], [row + 1, col + 1]
+            ];
+            kingMoves.forEach(move => {
+                const [r, c] = move;
+                if (r >= 0 && r < 8 && c >= 0 && c < 8 && (!initialBoardSetup[r][c] || initialBoardSetup[r][c].split('-')[1] !== color)) {
+                    moves.push([r, c]);
+                }
+            });
+            break;
+    }
+
+    return moves;
+}
+
+function showLegalMoves(row, col) {
+    const piece = selectedPiece.dataset.piece;
+    legalMoves = getLegalMoves(piece, row, col);
 
     legalMoves.forEach(move => {
         const [r, c] = move;
@@ -61,7 +177,7 @@ for (let row = 0; row < 8; row++) {
                     selectedPiece = null;
                 } else {
                     selectedPiece = piece;
-                    showLegalMoves(row, col);
+                    showLegalMoves(parseInt(piece.dataset.row), parseInt(piece.dataset.col));
                 }
             });
             square.appendChild(piece);
