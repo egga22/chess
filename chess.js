@@ -90,8 +90,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const row = parseInt(square.dataset.row);
         if (piece.dataset.type === 'pawn' && (row === 0 || row === 7)) {
             promotePawn(piece); // Call promotion function if pawn reaches the last row
+        } else {
+            switchTurn(); // Only switch turns if not promoting a pawn
         }
-        switchTurn(); // Move switchTurn here to ensure it's always called
     };
 
     const showLegalMoves = (piece, square) => {
