@@ -192,21 +192,27 @@ for (let row = 0; row < 8; row++) {
         }
 
         square.addEventListener('click', () => {
-            if (selectedPiece && legalMoves.some(move => move[0] == square.dataset.row && move[1] == square.dataset.col)) {
-                const [oldRow, oldCol] = [selectedPiece.dataset.row, selectedPiece.dataset.col];
-                // Check if there's a piece to capture and if it belongs to the opponent
-                if (initialBoardSetup[square.dataset.row][square.dataset.col] && initialBoardSetup[square.dataset.row][square.dataset.col].split('-')[1] !== currentPlayer) {
+            if (selectedPiece && legalMoves.some(move => move[0] == parseInt(square.dataset.row) && move[1] == parseInt(square.dataset.col))) {
+                const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
+                const targetPiece = initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)];
+        
+                // Check if the target square has an opponent's piece
+                if (targetPiece && targetPiece.split('-')[1] !== currentPlayer) {
                     square.innerHTML = '';  // Clear the square before moving the piece if capturing
                 }
+        
                 // Move the piece
-                initialBoardSetup[square.dataset.row][square.dataset.col] = initialBoardSetup[oldRow][oldCol];
+                initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)] = initialBoardSetup[oldRow][oldCol];
                 initialBoardSetup[oldRow][oldCol] = null;  // Clear the old position
-                selectedPiece.dataset.row = square.dataset.row;
+        
+                selectedPiece.dataset.row = square.dataset.row;  // Update the piece's data attributes
                 selectedPiece.dataset.col = square.dataset.col;
-                square.appendChild(selectedPiece);
+        
+                square.appendChild(selectedPiece);  // Move the piece to the new square
+                clearDots();  // Clear any move indicators
                 selectedPiece = null;
-                clearDots();
-                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w';
+                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w';  // Change the turn
+        
             } else if (selectedPiece && square.contains(selectedPiece)) {
                 clearDots();
                 selectedPiece = null; // Deselect piece if clicked again
