@@ -3,7 +3,7 @@ console.log('chess.js script loaded');
 const initialBoardSetup = [
     ['rook-b', 'knight-b', 'bishop-b', 'queen-b', 'king-b', 'bishop-b', 'knight-b', 'rook-b'],
     ['pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b'],
-    [], [], [], [],
+    [null, null, null, null, null, null, null, null],
     ['pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w'],
     ['rook-w', 'knight-w', 'bishop-w', 'queen-w', 'king-w', 'bishop-w', 'knight-w', 'rook-w']
 ];
@@ -31,10 +31,10 @@ function getLegalMoves(piece, row, col) {
             const startRow = (color === 'w') ? 6 : 1;
 
             // Forward movement
-            if (row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col] === null) {
+            if (row + direction >= 0 && row + direction < 8 && !initialBoardSetup[row + direction][col]) {
                 moves.push([row + direction, col]);
-                // Check if it's the first move and the next two squares are clear
-                if (row === startRow && initialBoardSetup[row + 2 * direction][col] === null) {
+                // Check for initial double move
+                if (row === startRow && !initialBoardSetup[row + 2 * direction][col]) {
                     moves.push([row + 2 * direction, col]);
                 }
             }
@@ -196,7 +196,7 @@ for (let row = 0; row < 8; row++) {
                     square.innerHTML = '';  // Clear the square before moving the piece
                 }
                 initialBoardSetup[square.dataset.row][square.dataset.col] = initialBoardSetup[oldRow][oldCol];
-                initialBoardSetup[oldRow][oldCol] = null;
+                initialBoardSetup[oldRow][oldCol] = null;  // Make sure this line is executed every time a piece moves
                 selectedPiece.dataset.row = square.dataset.row;
                 selectedPiece.dataset.col = square.dataset.col;
                 square.appendChild(selectedPiece);
