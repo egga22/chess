@@ -195,32 +195,34 @@ for (let row = 0; row < 8; row++) {
             if (selectedPiece && legalMoves.some(move => move[0] == parseInt(square.dataset.row) && move[1] == parseInt(square.dataset.col))) {
                 const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
                 const targetPiece = initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)];
-        
+                
+                console.log('Selected piece:', selectedPiece.dataset.piece);
                 console.log('Attempting to move from [' + oldRow + ',' + oldCol + '] to [' + parseInt(square.dataset.row) + ',' + parseInt(square.dataset.col) + ']');
-                console.log('Target piece:', targetPiece);
+                console.log('Target piece at destination:', targetPiece);
         
-                // Clear the target square if capturing
+                // Verify capturing condition
                 if (targetPiece && targetPiece.split('-')[1] !== currentPlayer) {
                     console.log('Capturing piece at target square');
-                    chessboard.children[parseInt(square.dataset.row) * 8 + parseInt(square.dataset.col)].innerHTML = '';
+                    chessboard.children[parseInt(square.dataset.row) * 8 + parseInt(square.dataset.col)].innerHTML = ''; // Clear the square visually
                 }
         
                 // Move the piece
-                initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)] = initialBoardSetup[oldRow][oldCol];
-                initialBoardSetup[oldRow][oldCol] = null;  // Clear the old position
+                initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)] = initialBoardSetup[oldRow][oldCol]; // Update the game state
+                initialBoardSetup[oldRow][oldCol] = null; // Clear the old position
         
-                selectedPiece.dataset.row = square.dataset.row;  // Update the piece's data attributes
-                selectedPiece.dataset.col = square.dataset.col;
+                selectedPiece.dataset.row = parseInt(square.dataset.row); // Update the piece's data attributes
+                selectedPiece.dataset.col = parseInt(square.dataset.col);
         
-                square.appendChild(selectedPiece);  // Move the piece to the new square
-                clearDots();  // Clear any move indicators
+                square.appendChild(selectedPiece); // Move the piece to the new square visually
+                clearDots(); // Clear any move indicators
                 selectedPiece = null;
-                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w';  // Change the turn
+                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Change the turn
         
                 console.log('Move completed. Current player:', currentPlayer);
             } else if (selectedPiece && square.contains(selectedPiece)) {
                 clearDots();
                 selectedPiece = null; // Deselect piece if clicked again
+                console.log('Piece deselected');
             }
         });
 
