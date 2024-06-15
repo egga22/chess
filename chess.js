@@ -178,32 +178,42 @@ for (let row = 0; row < 8; row++) {
         square.addEventListener('click', () => {
             const newRow = parseInt(square.dataset.row);
             const newCol = parseInt(square.dataset.col);
+        
+            // Log to see what happens when a square is clicked
+            console.log('Square clicked:', newRow, newCol);
+            console.log('Selected piece:', selectedPiece);
+            console.log('Legal moves available:', legalMoves);
+        
             if (selectedPiece && legalMoves.some(move => move[0] === newRow && move[1] === newCol)) {
                 const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
-                // Check for capture and handle appropriately
-                if (initialBoardSetup[newRow][newCol]) {
-                    // Logically remove the captured piece from the board setup
-                    initialBoardSetup[newRow][newCol] = null;
-                }
-                // Update the board state for the move
+        
+                // Confirm the move is executed
+                console.log('Moving from', oldRow, oldCol, 'to', newRow, newCol);
+        
+                // Physically move the piece in the board state array
                 initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
                 initialBoardSetup[oldRow][oldCol] = null;
         
-                // Visually move the piece
-                chessboard.children[oldRow * 8 + oldCol].innerHTML = ''; // Clear old square
-                chessboard.children[newRow * 8 + newCol].innerHTML = ''; // Clear target square and remove captured piece
-                square.appendChild(selectedPiece); // Move the piece to the new square
+                // Clear the old square visually and update the new square
+                chessboard.children[oldRow * 8 + oldCol].innerHTML = '';
+                chessboard.children[newRow * 8 + newCol].innerHTML = '';
+        
+                // Ensure the selected piece is moved visually
+                chessboard.children[newRow * 8 + newCol].appendChild(selectedPiece);
         
                 // Update the data attributes of the piece to the new position
                 selectedPiece.dataset.row = newRow;
                 selectedPiece.dataset.col = newCol;
         
-                clearDots(); // Clear potential move indicators
-                selectedPiece = null; // Deselect the piece
-                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Switch turns
-            } else if (selectedPiece) {
+                clearDots(); // Clear dots showing potential moves
+                selectedPiece = null; // Deselect the piece after moving
+                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Change turn
+        
+                console.log('Move completed to', newRow, newCol);
+            } else {
+                console.log('Move not valid or no piece selected');
                 clearDots();
-                selectedPiece = null; // Deselect piece if clicked again
+                selectedPiece = null; // Deselect the piece if clicked again
             }
         });
         chessboard.appendChild(square);
