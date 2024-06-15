@@ -81,18 +81,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const movePiece = (square) => {
         const piece = selectedPiece;
         const targetPiece = square.querySelector('.piece');
+        const fromRow = parseInt(piece.parentElement.dataset.row);
+        const fromCol = parseInt(piece.parentElement.dataset.col);
+        const toRow = parseInt(square.dataset.row);
+        const toCol = parseInt(square.dataset.col);
+    
         if (targetPiece) {
             targetPiece.remove();
         }
-        square.appendChild(piece);
-        piece.dataset.moved = "true"; // Mark the piece as moved
     
-        // Check for pawn promotion
-        const row = parseInt(square.dataset.row);
-        if (piece.dataset.type === 'pawn' && (row === 0 || row === 7)) {
-            promotePawn(piece); // Call promotion function if pawn reaches the last row
+        if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) { // Castling move
+            // Move the rook
+            const rookCol = toCol === 6 ? 7 : 0; // Rook's initial position
+            const rookTargetCol = toCol === 6 ? 5 : 3; // Rook's new position after castling
+            const rook = document.querySelector(`#piece${fromRow}${rookCol}`);
+            document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`).appendChild(rook);
+        }
+    
+        square.appendChild(piece);
+        piece.dataset.moved = "true";
+    
+        if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
+            promotePawn(piece);
         } else {
-            switchTurn(); // Only switch turns if not promoting a pawn
+            switchTurn();
         }
     };
 
@@ -158,7 +170,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 addDiagonalMoves(moves, row, col, color);
                 break;
             case 'king':
-                addKingMoves(moves, row, col, color);
+                addKingMoves(moves, row, col, color); // Existing moves
+                if (!JSON.parse(piece.dataset.moved)) { // Check if the king has not moved
+                    // Castling to the right
+                    if (canCastle(color, row, col, 1)) {
+                        moves.push([row, col + 2]); // Add the move two squares to the right
+                    }
+                    // Castling to the left
+                    if (canCastle(color, row, col, -1)) {
+                        moves.push([row, col - 2]); // Add the move two squares to the left
+                    }
+                }
                 break;
         }
         return moves;
@@ -230,6 +252,28 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     };
+
+    function canCastle(color, row, col, direction) {
+        let emptyCheckCol = col + direction;
+        const rookCol = direction === 1 ? 7 : 0; // Rook's column based on direction
+        const step = direction === 1 ? 1 : -1;
+    
+        if (!document.querySelector(`#piece${row}${rookCol}`) || JSON.parse(document.querySelector(`#piece${row}${rookCol}`).dataset.moved)) {
+            return false; // Rook has moved or does not exist
+        }
+    
+        while (emptyCheckCol !== rookCol) {
+            if (document.querySelector(`#piece${row}${emptyCheckCol}`)) {
+                return false; // There is a piece between the king and the rook
+            }
+            emptyCheckCol += step;
+        }
+    
+        // Additional checks for check condition could be added here
+    
+        return true; // Can castle if all conditions are met
+    }
+
     const removeMoveDots = () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
     };
@@ -261,4 +305,5 @@ document.addEventListener("DOMContentLoaded", () => {
         switchTurn();
     };
     createBoard();
+    
 });
