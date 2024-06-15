@@ -14,37 +14,37 @@ let selectedPiece = null;
 let legalMoves = [];
 // Add this to the beginning of your script to ensure you're working with fresh event listeners
 function setupBoard() {
+    chessboard.innerHTML = ''; // Clear the board to prevent duplicate squares
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
             const square = document.createElement('div');
-            square.className = 'square ' + ((row + col) % 2 === 0 ? 'white' : 'black');
+            square.className = `square ${(row + col) % 2 === 0 ? 'white' : 'black'}`;
             square.dataset.row = row;
             square.dataset.col = col;
             chessboard.appendChild(square);
-            if (initialBoardSetup[row][col]) {
+
+            const pieceType = initialBoardSetup[row][col];
+            if (pieceType) {
                 const piece = document.createElement('img');
-                piece.src = `images/${initialBoardSetup[row][col]}.svg`;
+                piece.src = `images/${pieceType}.svg`;
                 piece.className = 'piece';
-                piece.dataset.piece = initialBoardSetup[row][col];
+                piece.dataset.piece = pieceType;
                 piece.dataset.row = row;
                 piece.dataset.col = col;
                 square.appendChild(piece);
             }
-            square.addEventListener('click', handleSquareClick);
+            square.onclick = (e) => handleSquareClick(e, row, col);
         }
     }
 }
 
-function handleSquareClick(e) {
-    const clickedSquare = e.target;
-    const piece = clickedSquare.querySelector('.piece');
-    const row = parseInt(clickedSquare.dataset.row);
-    const col = parseInt(clickedSquare.dataset.col);
+function handleSquareClick(e, row, col) {
+    const clickedPiece = e.target.closest('.square').querySelector('.piece');
 
     if (selectedPiece && legalMoves.some(move => move[0] === row && move[1] === col)) {
         executeMove(row, col);
-    } else if (piece && piece.dataset.piece.split('-')[1] === currentPlayer) {
-        selectPiece(piece, row, col);
+    } else if (clickedPiece && clickedPiece.dataset.piece.split('-')[1] === currentPlayer) {
+        selectPiece(clickedPiece, row, col);
     } else {
         clearSelections();
     }
@@ -57,10 +57,19 @@ function selectPiece(piece, row, col) {
 }
 
 function executeMove(newRow, newCol) {
-    // Move piece in the data model and UI
     const oldRow = parseInt(selectedPiece.dataset.row);
     const oldCol = parseInt(selectedPiece.dataset.col);
-    movePieceInModel(oldRow, oldCol, newRow, newCol);
+
+    // Check if capturing
+    if (initialBoardSetup[newRow][newCol]) {
+        console.log(`Capturing piece at ${newRow}, ${newCol}`);
+    }
+
+    // Update the board state
+    initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
+    initialBoardSetup[oldRow][oldCol] = null;
+
+    // Move the piece visually
     movePieceInUI(oldRow, oldCol, newRow, newCol);
     switchPlayer();
 }
@@ -73,8 +82,10 @@ function movePieceInModel(oldRow, oldCol, newRow, newCol) {
 function movePieceInUI(oldRow, oldCol, newRow, newCol) {
     const newSquare = chessboard.children[newRow * 8 + newCol];
     const oldSquare = chessboard.children[oldRow * 8 + oldCol];
+
     newSquare.appendChild(selectedPiece);
-    oldSquare.innerHTML = ''; // Clear the old square
+    oldSquare.innerHTML = '';
+
     selectedPiece.dataset.row = newRow;
     selectedPiece.dataset.col = newCol;
     clearSelections();
