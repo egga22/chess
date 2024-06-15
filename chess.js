@@ -43,18 +43,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const handleSquareClick = (event) => {
         const square = event.currentTarget;
         const piece = square.querySelector('.piece');
-
+    
         if (selectedPiece) {
             if (selectedPiece.parentElement === square) {
                 // Deselect the piece
                 removeMoveDots();
                 selectedPiece = null;
             } else if (!piece || piece.dataset.color !== selectedPiece.dataset.color) {
-                // Move the piece
-                movePiece(square);
+                // Check if the move is legal
+                const row = parseInt(square.dataset.row);
+                const col = parseInt(square.dataset.col);
+                const legalMoves = getLegalMoves(selectedPiece, parseInt(selectedPiece.parentElement.dataset.row), parseInt(selectedPiece.parentElement.dataset.col));
+                const isLegalMove = legalMoves.some(([r, c]) => r === row && c === col);
+    
+                if (isLegalMove) {
+                    // Move the piece
+                    movePiece(square);
+                    removeMoveDots();
+                    selectedPiece = null;
+                    switchTurn();
+                }
+            } else if (piece && piece.dataset.color === selectedPiece.dataset.color) {
+                // Select a different piece
                 removeMoveDots();
-                selectedPiece = null;
-                switchTurn();
+                selectedPiece = piece;
+                showLegalMoves(piece, square);
             }
         } else if (piece && piece.dataset.color === turn) {
             // Select the piece
@@ -96,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const moves = [];
         const color = piece.dataset.color;
         const type = piece.dataset.type;
-
+    
         switch (type) {
             case 'pawn':
                 const direction = color === 'w' ? -1 : 1;
@@ -104,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (isEmptySquare(row + direction, col)) {
                     moves.push([row + direction, col]);
                     // Move two squares on first move
-                    if (!piece.dataset.moved && isEmptySquare(row + 2 * direction, col)) {
+                    if (!piece.dataset.moved && isEmptySquare(row + 2 * direction, col) && isEmptySquare(row + direction, col)) {
                         moves.push([row + 2 * direction, col]);
                     }
                 }
