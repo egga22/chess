@@ -255,7 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
         pawn.src = `images/${type}-${color}.svg`;
         pawn.dataset.type = type;
         document.body.removeChild(document.querySelector('.promotion-ui'));
-        // No need to switchTurn here as it's already handled in movePiece
+        switchTurn();
     };
     createBoard();
 });
