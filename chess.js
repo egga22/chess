@@ -3,7 +3,10 @@ console.log('chess.js script loaded');
 const initialBoardSetup = [
     ['rook-b', 'knight-b', 'bishop-b', 'queen-b', 'king-b', 'bishop-b', 'knight-b', 'rook-b'],
     ['pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b'],
-    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null], // Empty row
+    [null, null, null, null, null, null, null, null], // Empty row
+    [null, null, null, null, null, null, null, null], // Empty row
+    [null, null, null, null, null, null, null, null], // Empty row
     ['pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w'],
     ['rook-w', 'knight-w', 'bishop-w', 'queen-w', 'king-w', 'bishop-w', 'knight-w', 'rook-w']
 ];
