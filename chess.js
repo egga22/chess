@@ -176,25 +176,29 @@ for (let row = 0; row < 8; row++) {
             square.appendChild(piece);
         }
         square.addEventListener('click', () => {
-            if (selectedPiece && legalMoves.some(move => move[0] == parseInt(square.dataset.row) && move[1] == parseInt(square.dataset.col))) {
+            const newRow = parseInt(square.dataset.row);
+            const newCol = parseInt(square.dataset.col);
+            if (selectedPiece && legalMoves.some(move => move[0] === newRow && move[1] === newCol)) {
                 const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
-                const targetPiece = initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)];
-                
-                // Move the piece in the data model and update visuals
-                initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)] = initialBoardSetup[oldRow][oldCol];
-                initialBoardSetup[oldRow][oldCol] = null;
+                const targetPiece = initialBoardSetup[newRow][newCol];
         
-                // Clear the visual content of the target square if a piece is present
-                chessboard.children[parseInt(square.dataset.row) * 8 + parseInt(square.dataset.col)].innerHTML = '';
-                
-                // Move the selected piece to the new square visually
-                selectedPiece.dataset.row = parseInt(square.dataset.row);
-                selectedPiece.dataset.col = parseInt(square.dataset.col);
-                square.appendChild(selectedPiece);
-                
-                clearDots(); // Clear move indicators
-                selectedPiece = null;
-                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Switch turns
+                // Execute the capture if there's an opposing piece
+                if (targetPiece && targetPiece.split('-')[1] !== currentPlayer) {
+                    // Clear the target square
+                    chessboard.children[newRow * 8 + newCol].innerHTML = '';
+                    // Update the board state to reflect the capture
+                    initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
+                    initialBoardSetup[oldRow][oldCol] = null;
+                    
+                    // Move the piece visually
+                    square.appendChild(selectedPiece);
+                    selectedPiece.dataset.row = newRow;
+                    selectedPiece.dataset.col = newCol;
+        
+                    clearDots(); // Clear move indicators
+                    selectedPiece = null;
+                    currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Switch turns
+                }
             } else if (selectedPiece && square.contains(selectedPiece)) {
                 clearDots();
                 selectedPiece = null; // Deselect piece if clicked again
