@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     piece.dataset.color = initialSetup[row][col].split('-')[1];
                     piece.dataset.type = initialSetup[row][col].split('-')[0];
                     piece.dataset.moved = false; // To track if a pawn has moved
+                    piece.id = `piece${row}${col}`; // Assign an ID to each piece
                     square.appendChild(piece);
                 }
 
@@ -78,13 +79,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const movePiece = (square) => {
         const piece = selectedPiece;
-        // Remove any existing piece from the destination square
         const targetPiece = square.querySelector('.piece');
         if (targetPiece) {
             targetPiece.remove();
         }
         square.appendChild(piece);
-        piece.dataset.moved = true; // Mark the piece as moved
+        piece.dataset.moved = "true"; // Mark the piece as moved
+    
+        // Check for pawn promotion
+        const row = parseInt(square.dataset.row);
+        if (piece.dataset.type === 'pawn' && (row === 0 || row === 7)) {
+            promotePawn(piece); // Call promotion function if pawn reaches the last row
+        } else {
+            switchTurn(); // Continue game otherwise
+        }
     };
 
     const showLegalMoves = (piece, square) => {
@@ -228,6 +236,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const switchTurn = () => {
         turn = turn === 'w' ? 'b' : 'w';
     };
+    const promotePawn = (pawn) => {
+        const promotionUI = document.createElement('div');
+        promotionUI.setAttribute('class', 'promotion-ui');
+        promotionUI.innerHTML = `
+            <p>Select a piece for promotion:</p>
+            <div class="promotion-options">
+                <img src="images/queen-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'queen', '${pawn.id}')">
+                <img src="images/rook-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'rook', '${pawn.id}')">
+                <img src="images/bishop-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'bishop', '${pawn.id}')">
+                <img src="images/knight-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'knight', '${pawn.id}')">
+            </div>
+        `;
+        document.body.appendChild(promotionUI);
+    };
     
+    window.completePromotion = (color, type, id) => {
+        const pawn = document.getElementById(id);
+        pawn.src = `images/${type}-${color}.svg`;
+        pawn.dataset.type = type;
+        document.body.removeChild(document.querySelector('.promotion-ui'));
+        switchTurn(); // Continue the game after promotion
+    };
     createBoard();
 });
