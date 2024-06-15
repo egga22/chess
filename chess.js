@@ -194,12 +194,13 @@ for (let row = 0; row < 8; row++) {
         square.addEventListener('click', () => {
             if (selectedPiece && legalMoves.some(move => move[0] == square.dataset.row && move[1] == square.dataset.col)) {
                 const [oldRow, oldCol] = [selectedPiece.dataset.row, selectedPiece.dataset.col];
-                // Clear the target square if there's a capture
-                if(initialBoardSetup[square.dataset.row][square.dataset.col] !== null) {
-                    square.innerHTML = '';  // Clear the square before moving the piece
+                // Check if there's a piece to capture and if it belongs to the opponent
+                if (initialBoardSetup[square.dataset.row][square.dataset.col] && initialBoardSetup[square.dataset.row][square.dataset.col].split('-')[1] !== currentPlayer) {
+                    square.innerHTML = '';  // Clear the square before moving the piece if capturing
                 }
+                // Move the piece
                 initialBoardSetup[square.dataset.row][square.dataset.col] = initialBoardSetup[oldRow][oldCol];
-                initialBoardSetup[oldRow][oldCol] = null;  // Make sure this line is executed every time a piece moves
+                initialBoardSetup[oldRow][oldCol] = null;  // Clear the old position
                 selectedPiece.dataset.row = square.dataset.row;
                 selectedPiece.dataset.col = square.dataset.col;
                 square.appendChild(selectedPiece);
