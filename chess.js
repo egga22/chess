@@ -13,69 +13,78 @@ let currentPlayer = 'w'; // Start the game with white's turn
 let selectedPiece = null;
 let legalMoves = [];
 // Add this to the beginning of your script to ensure you're working with fresh event listeners
-document.querySelectorAll('.square').forEach(square => {
-    square.removeEventListener('click', handleSquareClick);
-    square.addEventListener('click', handleSquareClick);
-});
-document.querySelectorAll('.piece').forEach(piece => {
-    piece.removeEventListener('click', handlePieceClick);
-    piece.addEventListener('click', handlePieceClick);
-});
-
-function handlePieceClick(e) {
-    console.log('Piece clicked:', this.dataset.piece, 'at row:', this.dataset.row, 'col:', this.dataset.col);
-    e.stopPropagation();
-    clearDots();
-    if (selectedPiece === this) {
-        console.log('Deselecting piece:', selectedPiece.dataset.piece);
-        selectedPiece = null;
-    } else if (this.dataset.piece.split('-')[1] === currentPlayer) {
-        console.log('Selecting new piece:', this.dataset.piece);
-        selectedPiece = this;
-        showLegalMoves(parseInt(this.dataset.row), parseInt(this.dataset.col));
-    }
-}
-
-function handleSquareClick() {
-    console.log('Square clicked:', this.dataset.row, this.dataset.col);
-    if (selectedPiece) {
-        const newRow = parseInt(this.dataset.row);
-        const newCol = parseInt(this.dataset.col);
-        console.log('Attempting to move selected piece:', selectedPiece.dataset.piece, 'to row:', newRow, 'col:', newCol);
-
-        const legalMoveFound = legalMoves.some(move => move[0] === newRow && move[1] === newCol);
-        console.log('Is move legal?', legalMoveFound);
-
-        if (legalMoveFound) {
-            const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
-            console.log('Executing move from', oldRow, oldCol, 'to', newRow, newCol);
-
-            initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol]; // Update the board state
-            initialBoardSetup[oldRow][oldCol] = null;
-
-            updateBoardVisuals(oldRow, oldCol, newRow, newCol); // Handle the visuals
-
-            currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Switch turns
-            selectedPiece = null; // Deselect the piece after moving
-            clearDots(); // Clear potential move indicators
+function setupBoard() {
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const square = document.createElement('div');
+            square.className = 'square ' + ((row + col) % 2 === 0 ? 'white' : 'black');
+            square.dataset.row = row;
+            square.dataset.col = col;
+            chessboard.appendChild(square);
+            if (initialBoardSetup[row][col]) {
+                const piece = document.createElement('img');
+                piece.src = `images/${initialBoardSetup[row][col]}.svg`;
+                piece.className = 'piece';
+                piece.dataset.piece = initialBoardSetup[row][col];
+                piece.dataset.row = row;
+                piece.dataset.col = col;
+                square.appendChild(piece);
+            }
+            square.addEventListener('click', handleSquareClick);
         }
-    } else {
-        console.log('No piece selected to move.');
     }
 }
 
-function updateBoardVisuals(oldRow, oldCol, newRow, newCol) {
-    // Clear the old and new squares visually
-    const oldSquare = chessboard.children[oldRow * 8 + oldCol];
-    const newSquare = chessboard.children[newRow * 8 + newCol];
-    oldSquare.innerHTML = '';
-    newSquare.innerHTML = '';
+function handleSquareClick(e) {
+    const clickedSquare = e.target;
+    const piece = clickedSquare.querySelector('.piece');
+    const row = parseInt(clickedSquare.dataset.row);
+    const col = parseInt(clickedSquare.dataset.col);
 
-    // Move the piece visually to the new square
+    if (selectedPiece && legalMoves.some(move => move[0] === row && move[1] === col)) {
+        executeMove(row, col);
+    } else if (piece && piece.dataset.piece.split('-')[1] === currentPlayer) {
+        selectPiece(piece, row, col);
+    } else {
+        clearSelections();
+    }
+}
+
+function selectPiece(piece, row, col) {
+    clearSelections(); // Clear previous selections and dots
+    selectedPiece = piece;
+    showLegalMoves(row, col); // Calculate and show legal moves
+}
+
+function executeMove(newRow, newCol) {
+    // Move piece in the data model and UI
+    const oldRow = parseInt(selectedPiece.dataset.row);
+    const oldCol = parseInt(selectedPiece.dataset.col);
+    movePieceInModel(oldRow, oldCol, newRow, newCol);
+    movePieceInUI(oldRow, oldCol, newRow, newCol);
+    switchPlayer();
+}
+
+function movePieceInModel(oldRow, oldCol, newRow, newCol) {
+    initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
+    initialBoardSetup[oldRow][oldCol] = null;
+}
+
+function movePieceInUI(oldRow, oldCol, newRow, newCol) {
+    const newSquare = chessboard.children[newRow * 8 + newCol];
+    const oldSquare = chessboard.children[oldRow * 8 + oldCol];
     newSquare.appendChild(selectedPiece);
+    oldSquare.innerHTML = ''; // Clear the old square
     selectedPiece.dataset.row = newRow;
     selectedPiece.dataset.col = newCol;
+    clearSelections();
 }
+
+function clearSelections() {
+    clearDots();
+    selectedPiece = null;
+}
+
 function clearDots() {
     const dots = document.querySelectorAll('.move-dot');
     dots.forEach(dot => dot.remove());
