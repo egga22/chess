@@ -178,23 +178,26 @@ for (let row = 0; row < 8; row++) {
         square.addEventListener('click', () => {
             const newRow = parseInt(square.dataset.row);
             const newCol = parseInt(square.dataset.col);
-            // Check if there is a selected piece and the target move is within the legal moves
             if (selectedPiece && legalMoves.some(move => move[0] === newRow && move[1] === newCol)) {
                 const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
-                
-                // Move the piece in the board state array
+                // Check for capture and handle appropriately
+                if (initialBoardSetup[newRow][newCol]) {
+                    // Logically remove the captured piece from the board setup
+                    initialBoardSetup[newRow][newCol] = null;
+                }
+                // Update the board state for the move
                 initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
                 initialBoardSetup[oldRow][oldCol] = null;
-                
+        
                 // Visually move the piece
                 chessboard.children[oldRow * 8 + oldCol].innerHTML = ''; // Clear old square
-                chessboard.children[newRow * 8 + newCol].innerHTML = ''; // Clear target square if capturing
-                square.appendChild(selectedPiece); // Add the piece to the new square
-                
+                chessboard.children[newRow * 8 + newCol].innerHTML = ''; // Clear target square and remove captured piece
+                square.appendChild(selectedPiece); // Move the piece to the new square
+        
                 // Update the data attributes of the piece to the new position
                 selectedPiece.dataset.row = newRow;
                 selectedPiece.dataset.col = newCol;
-                
+        
                 clearDots(); // Clear potential move indicators
                 selectedPiece = null; // Deselect the piece
                 currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Switch turns
