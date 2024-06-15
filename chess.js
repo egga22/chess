@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     piece.dataset.moved = false; // To track if a pawn has moved
                     square.appendChild(piece);
                 }
+                square.addEventListener('click', handleSquareClick);
             }
         }
     };
