@@ -90,12 +90,14 @@ document.addEventListener("DOMContentLoaded", () => {
             targetPiece.remove();
         }
     
-        if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) { // Castling move
-            // Move the rook
+        // Handle castling
+        if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) {
             const rookCol = toCol === 6 ? 7 : 0; // Rook's initial position
             const rookTargetCol = toCol === 6 ? 5 : 3; // Rook's new position after castling
             const rook = document.querySelector(`#piece${fromRow}${rookCol}`);
-            document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`).appendChild(rook);
+            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
+            rookTargetSquare.appendChild(rook);
+            rook.dataset.moved = "true";
         }
     
         square.appendChild(piece);
@@ -170,7 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 addDiagonalMoves(moves, row, col, color);
                 break;
             case 'king':
-                addKingMoves(moves, row, col, color); // Existing moves
+                addKingMoves(moves, row, col, color); // Existing king moves
                 if (!JSON.parse(piece.dataset.moved)) { // Check if the king has not moved
                     // Castling to the right
                     if (canCastle(color, row, col, 1)) {
@@ -253,26 +255,31 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    function canCastle(color, row, col, direction) {
-        let emptyCheckCol = col + direction;
+    const canCastle = (color, row, col, direction) => {
         const rookCol = direction === 1 ? 7 : 0; // Rook's column based on direction
         const step = direction === 1 ? 1 : -1;
+        let emptyCheckCol = col + step;
     
-        if (!document.querySelector(`#piece${row}${rookCol}`) || JSON.parse(document.querySelector(`#piece${row}${rookCol}`).dataset.moved)) {
-            return false; // Rook has moved or does not exist
+        // Check if the rook has moved or does not exist
+        const rook = document.querySelector(`#piece${row}${rookCol}`);
+        if (!rook || rook.dataset.type !== 'rook' || JSON.parse(rook.dataset.moved)) {
+            return false;
         }
     
+        // Check if all squares between the king and rook are empty
         while (emptyCheckCol !== rookCol) {
-            if (document.querySelector(`#piece${row}${emptyCheckCol}`)) {
-                return false; // There is a piece between the king and the rook
+            if (document.querySelector(`[data-row="${row}"][data-col="${emptyCheckCol}"] .piece`)) {
+                return false;
             }
             emptyCheckCol += step;
         }
     
-        // Additional checks for check condition could be added here
+        // Check if the king passes through or ends up in check
+        // For simplicity, this example does not implement the check verification
+        // You need to ensure these conditions are handled properly in your game logic
     
-        return true; // Can castle if all conditions are met
-    }
+        return true; // All conditions met for castling
+    };
 
     const removeMoveDots = () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
