@@ -63,6 +63,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const movePiece = (square) => {
         const piece = selectedPiece;
+        // Remove any existing piece from the destination square
+        const targetPiece = square.querySelector('.piece');
+        if (targetPiece) {
+            targetPiece.remove();
+        }
         square.appendChild(piece);
         piece.dataset.moved = true; // Mark the piece as moved
     };
@@ -72,7 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const row = parseInt(square.dataset.row);
         const col = parseInt(square.dataset.col);
         const possibleMoves = getLegalMoves(piece, row, col);
-
+    
         possibleMoves.forEach(([r, c]) => {
             if (r >= 0 && r < 8 && c >= 0 && c < 8) {
                 const targetSquare = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
@@ -84,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     };
-
+    
     const getLegalMoves = (piece, row, col) => {
         const moves = [];
         const color = piece.dataset.color;
@@ -133,6 +138,73 @@ document.addEventListener("DOMContentLoaded", () => {
                 break;
         }
         return moves;
+    };
+    
+    const isEmptySquare = (row, col) => {
+        const square = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
+        return square && !square.querySelector('.piece');
+    };
+    
+    const isEnemyPiece = (row, col, color) => {
+        const square = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
+        const piece = square ? square.querySelector('.piece') : null;
+        return piece && piece.dataset.color !== color;
+    };
+    
+    const addLinearMoves = (moves, row, col, color, rowDir, colDir) => {
+        let r = row + rowDir;
+        let c = col + colDir;
+        while (r >= 0 && r < 8 && c >= 0 && c < 8) {
+            if (isEmptySquare(r, c)) {
+                moves.push([r, c]);
+            } else if (isEnemyPiece(r, c, color)) {
+                moves.push([r, c]);
+                break;
+            } else {
+                break;
+            }
+            r += rowDir;
+            c += colDir;
+        }
+    };
+    
+    const addDiagonalMoves = (moves, row, col, color) => {
+        addLinearMoves(moves, row, col, color, 1, 1);
+        addLinearMoves(moves, row, col, color, -1, -1);
+        addLinearMoves(moves, row, col, color, 1, -1);
+        addLinearMoves(moves, row, col, color, -1, 1);
+    };
+    
+    const addKnightMoves = (moves, row, col, color) => {
+        const knightMoves = [
+            [row - 2, col - 1], [row - 2, col + 1],
+            [row - 1, col - 2], [row - 1, col + 2],
+            [row + 1, col - 2], [row + 1, col + 2],
+            [row + 2, col - 1], [row + 2, col + 1]
+        ];
+        knightMoves.forEach(([r, c]) => {
+            if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+                if (isEmptySquare(r, c) || isEnemyPiece(r, c, color)) {
+                    moves.push([r, c]);
+                }
+            }
+        });
+    };
+    
+    const addKingMoves = (moves, row, col, color) => {
+        const kingMoves = [
+            [row - 1, col], [row + 1, col],
+            [row, col - 1], [row, col + 1],
+            [row - 1, col - 1], [row - 1, col + 1],
+            [row + 1, col - 1], [row + 1, col + 1]
+        ];
+        kingMoves.forEach(([r, c]) => {
+            if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+                if (isEmptySquare(r, c) || isEnemyPiece(r, c, color)) {
+                    moves.push([r, c]);
+                }
+            }
+        });
     };
 
     const isEmptySquare = (row, col) => {
