@@ -164,6 +164,7 @@ for (let row = 0; row < 8; row++) {
             piece.dataset.row = row;
             piece.dataset.col = col;
             piece.addEventListener('click', (e) => {
+                console.log('Piece clicked:', this.dataset.piece, 'at row:', this.dataset.row, 'col:', this.dataset.col);
                 e.stopPropagation();
                 clearDots();
                 if (selectedPiece === piece) {
