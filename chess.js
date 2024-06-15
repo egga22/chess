@@ -90,9 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const row = parseInt(square.dataset.row);
         if (piece.dataset.type === 'pawn' && (row === 0 || row === 7)) {
             promotePawn(piece); // Call promotion function if pawn reaches the last row
-        } else {
-            switchTurn(); // Continue game otherwise
         }
+        switchTurn(); // Move switchTurn here to ensure it's always called
     };
 
     const showLegalMoves = (piece, square) => {
@@ -252,10 +251,10 @@ document.addEventListener("DOMContentLoaded", () => {
     
     window.completePromotion = (color, type, id) => {
         const pawn = document.getElementById(id);
-            pawn.src = `images/${type}-${color}.svg`;
-            pawn.dataset.type = type;
-            document.body.removeChild(document.querySelector('.promotion-ui'));
-            switchTurn(); // Ensure this is the only place it's called after a move
+        pawn.src = `images/${type}-${color}.svg`;
+        pawn.dataset.type = type;
+        document.body.removeChild(document.querySelector('.promotion-ui'));
+        // No need to switchTurn here as it's already handled in movePiece
     };
     createBoard();
 });
