@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (isEmptySquare(row + direction, col)) {
                     moves.push([row + direction, col]);
                     // Move two squares on first move
-                    if (!piece.dataset.moved && isEmptySquare(row + 2 * direction, col) && isEmptySquare(row + direction, col)) {
+                    if (!piece.dataset.moved && isEmptySquare(row + 2 * direction, col)) {
                         moves.push([row + 2 * direction, col]);
                     }
                 }
