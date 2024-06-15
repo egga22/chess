@@ -196,8 +196,12 @@ for (let row = 0; row < 8; row++) {
                 const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
                 const targetPiece = initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)];
         
+                console.log('Attempting to move from [' + oldRow + ',' + oldCol + '] to [' + parseInt(square.dataset.row) + ',' + parseInt(square.dataset.col) + ']');
+                console.log('Target piece:', targetPiece);
+        
                 // Check if the target square has an opponent's piece
                 if (targetPiece && targetPiece.split('-')[1] !== currentPlayer) {
+                    console.log('Capturing piece at target square');
                     square.innerHTML = '';  // Clear the square before moving the piece if capturing
                 }
         
@@ -213,6 +217,7 @@ for (let row = 0; row < 8; row++) {
                 selectedPiece = null;
                 currentPlayer = (currentPlayer === 'w') ? 'b' : 'w';  // Change the turn
         
+                console.log('Move completed. Current player:', currentPlayer);
             } else if (selectedPiece && square.contains(selectedPiece)) {
                 clearDots();
                 selectedPiece = null; // Deselect piece if clicked again
