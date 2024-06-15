@@ -1,5 +1,3 @@
-console.log('chess.js script loaded');
-
 const initialBoardSetup = [
     ['rook-b', 'knight-b', 'bishop-b', 'queen-b', 'king-b', 'bishop-b', 'knight-b', 'rook-b'],
     ['pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b', 'pawn-b'],
@@ -10,29 +8,22 @@ const initialBoardSetup = [
     ['pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w', 'pawn-w'],
     ['rook-w', 'knight-w', 'bishop-w', 'queen-w', 'king-w', 'bishop-w', 'knight-w', 'rook-w']
 ];
-
 const chessboard = document.getElementById('chessboard');
 let currentPlayer = 'w'; // Start the game with white's turn
-console.log('Chessboard element:', chessboard);
-
 let selectedPiece = null;
 let legalMoves = [];
-
 function clearDots() {
     const dots = document.querySelectorAll('.move-dot');
     dots.forEach(dot => dot.remove());
 }
-
 function getLegalMoves(piece, row, col) {
     const type = piece.split('-')[0];
     const color = piece.split('-')[1];
     const moves = [];
-
     switch (type) {
         case 'pawn':
             const direction = (color === 'w') ? -1 : 1;
             const startRow = (color === 'w') ? 6 : 1;
-
             // Forward movement
             if (row + direction >= 0 && row + direction < 8 && !initialBoardSetup[row + direction][col]) {
                 moves.push([row + direction, col]);
@@ -41,7 +32,6 @@ function getLegalMoves(piece, row, col) {
                     moves.push([row + 2 * direction, col]);
                 }
             }
-
             // Diagonal captures
             if (col > 0 && row + direction >= 0 && row + direction < 8 && initialBoardSetup[row + direction][col - 1] && initialBoardSetup[row + direction][col - 1].split('-')[1] !== color) {
                 moves.push([row + direction, col - 1]);
@@ -121,7 +111,6 @@ function getLegalMoves(piece, row, col) {
                 if (initialBoardSetup[row + i][col + i]) break;
             }
             for (let i = 1; row - i >= 0 && col - i >= 0 && (!initialBoardSetup
-
 [row - i][col - i] || initialBoardSetup[row - i][col - i].split('-')[1] !== color); i++) {
                 moves.push([row - i, col - i]);
                 if (initialBoardSetup[row - i][col - i]) break;
@@ -150,11 +139,9 @@ function getLegalMoves(piece, row, col) {
     }
     return moves;
 }
-
 function showLegalMoves(row, col) {
     const piece = selectedPiece.dataset.piece;
     legalMoves = getLegalMoves(piece, row, col);
-
     legalMoves.forEach(move => {
         const [r, c] = move;
         const square = chessboard.children[r * 8 + c];
@@ -163,14 +150,12 @@ function showLegalMoves(row, col) {
         square.appendChild(dot);
     });
 }
-
 for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
         const square = document.createElement('div');
         square.className = 'square ' + ((row + col) % 2 === 0 ? 'white' : 'black');
         square.dataset.row = row;
         square.dataset.col = col;
-
         if (initialBoardSetup[row][col]) {
             const piece = document.createElement('img');
             piece.src = `images/${initialBoardSetup[row][col]}.svg`;
@@ -190,43 +175,31 @@ for (let row = 0; row < 8; row++) {
             });
             square.appendChild(piece);
         }
-
         square.addEventListener('click', () => {
             if (selectedPiece && legalMoves.some(move => move[0] == parseInt(square.dataset.row) && move[1] == parseInt(square.dataset.col))) {
                 const [oldRow, oldCol] = [parseInt(selectedPiece.dataset.row), parseInt(selectedPiece.dataset.col)];
                 const targetPiece = initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)];
                 
-                console.log('Selected piece:', selectedPiece.dataset.piece);
-                console.log('Attempting to move from [' + oldRow + ',' + oldCol + '] to [' + parseInt(square.dataset.row) + ',' + parseInt(square.dataset.col) + ']');
-                console.log('Target piece at destination:', targetPiece);
+                // Move the piece in the data model and update visuals
+                initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)] = initialBoardSetup[oldRow][oldCol];
+                initialBoardSetup[oldRow][oldCol] = null;
         
-                // Verify capturing condition
-                if (targetPiece && targetPiece.split('-')[1] !== currentPlayer) {
-                    console.log('Capturing piece at target square');
-                    chessboard.children[parseInt(square.dataset.row) * 8 + parseInt(square.dataset.col)].innerHTML = ''; // Clear the square visually
-                }
-        
-                // Move the piece
-                initialBoardSetup[parseInt(square.dataset.row)][parseInt(square.dataset.col)] = initialBoardSetup[oldRow][oldCol]; // Update the game state
-                initialBoardSetup[oldRow][oldCol] = null; // Clear the old position
-        
-                selectedPiece.dataset.row = parseInt(square.dataset.row); // Update the piece's data attributes
+                // Clear the visual content of the target square if a piece is present
+                chessboard.children[parseInt(square.dataset.row) * 8 + parseInt(square.dataset.col)].innerHTML = '';
+                
+                // Move the selected piece to the new square visually
+                selectedPiece.dataset.row = parseInt(square.dataset.row);
                 selectedPiece.dataset.col = parseInt(square.dataset.col);
-        
-                square.appendChild(selectedPiece); // Move the piece to the new square visually
-                clearDots(); // Clear any move indicators
+                square.appendChild(selectedPiece);
+                
+                clearDots(); // Clear move indicators
                 selectedPiece = null;
-                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Change the turn
-        
-                console.log('Move completed. Current player:', currentPlayer);
+                currentPlayer = (currentPlayer === 'w') ? 'b' : 'w'; // Switch turns
             } else if (selectedPiece && square.contains(selectedPiece)) {
                 clearDots();
                 selectedPiece = null; // Deselect piece if clicked again
-                console.log('Piece deselected');
             }
         });
-
         chessboard.appendChild(square);
     }
 }
-console.log('Board setup completed');
