@@ -40,12 +40,16 @@ function setupBoard() {
 
 function handleSquareClick(e, row, col) {
     const clickedPiece = e.target.closest('.square').querySelector('.piece');
+    console.log(`Handling click at row ${row}, col ${col}, piece: ${clickedPiece ? clickedPiece.dataset.piece : 'none'}`);
 
     if (selectedPiece && legalMoves.some(move => move[0] === row && move[1] === col)) {
+        console.log('Legal move found, executing move...');
         executeMove(row, col);
     } else if (clickedPiece && clickedPiece.dataset.piece.split('-')[1] === currentPlayer) {
+        console.log('Selecting piece...');
         selectPiece(clickedPiece, row, col);
     } else {
+        console.log('Clearing selections...');
         clearSelections();
     }
 }
@@ -60,32 +64,56 @@ function executeMove(newRow, newCol) {
     const oldRow = parseInt(selectedPiece.dataset.row);
     const oldCol = parseInt(selectedPiece.dataset.col);
 
-    // Check if capturing
+    // Check if the target square contains an opponent's piece
     if (initialBoardSetup[newRow][newCol]) {
-        console.log(`Capturing piece at ${newRow}, ${newCol}`);
+        console.log(`Capturing piece at ${newRow},${newCol}`);
+        if (initialBoardSetup[newRow][newCol].split('-')[1] !== currentPlayer) {
+            // Valid capture
+            console.log(`Valid capture made by ${currentPlayer} at ${newRow},${newCol}`);
+        } else {
+            // Attempt to capture own piece, which should not be allowed
+            console.log(`Invalid capture attempt on own piece by ${currentPlayer} at ${newRow},${newCol}`);
+            return; // Prevent the capture and exit the function
+        }
     }
 
-    // Update the board state
-    initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
-    initialBoardSetup[oldRow][oldCol] = null;
-
-    // Move the piece visually
-    movePieceInUI(oldRow, oldCol, newRow, newCol);
+    // Proceed with the move
+    updateGameBoard(oldRow, oldCol, newRow, newCol);
+    updateUI(oldRow, oldCol, newRow, newCol);
     switchPlayer();
 }
 
+function updateGameBoard(oldRow, oldCol, newRow, newCol) {
+    initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
+    initialBoardSetup[oldRow][oldCol] = null;
+    console.log(`Board updated: Moved from [${oldRow},${oldCol}] to [${newRow},${newCol}]`);
+
+}
+
+function updateUI(oldRow, oldCol, newRow, newCol) {
+    const newSquare = chessboard.children[newRow * 8 + newCol];
+    const oldSquare = chessboard.children[oldRow * 8 + oldCol];
+    newSquare.innerHTML = ''; // Clear the target square first (important for captures)
+    newSquare.appendChild(selectedPiece); // Move the piece to the new square
+    oldSquare.innerHTML = ''; // Clear the old square
+    selectedPiece.dataset.row = newRow;
+    selectedPiece.dataset.col = newCol;
+    console.log(`UI updated: Piece moved from [${oldRow},${oldCol}] to [${newRow},${newCol}]`);
+    clearSelections();
+}
+
 function movePieceInModel(oldRow, oldCol, newRow, newCol) {
+    console.log(`Updating model from ${oldRow},${oldCol} to ${newRow},${newCol}`);
     initialBoardSetup[newRow][newCol] = initialBoardSetup[oldRow][oldCol];
     initialBoardSetup[oldRow][oldCol] = null;
 }
 
 function movePieceInUI(oldRow, oldCol, newRow, newCol) {
+    console.log(`Updating UI from ${oldRow},${oldCol} to ${newRow},${newCol}`);
     const newSquare = chessboard.children[newRow * 8 + newCol];
     const oldSquare = chessboard.children[oldRow * 8 + oldCol];
-
     newSquare.appendChild(selectedPiece);
     oldSquare.innerHTML = '';
-
     selectedPiece.dataset.row = newRow;
     selectedPiece.dataset.col = newCol;
     clearSelections();
