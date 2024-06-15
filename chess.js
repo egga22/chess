@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const handleSquareClick = (event) => {
+        console.log(`Handling click, current turn: ${turn}`);
         const square = event.currentTarget;
         const piece = square.querySelector('.piece');
     
@@ -58,11 +59,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 const isLegalMove = legalMoves.some(([r, c]) => r === row && c === col);
     
                 if (isLegalMove) {
-                    // Move the piece
+                    console.log(`Move is legal, current turn before move: ${turn}`);
                     movePiece(square);
+                    console.log(`Current turn after move: ${turn}`);
                     removeMoveDots();
                     selectedPiece = null;
-                    switchTurn();
                 }
             } else if (piece && piece.dataset.color === selectedPiece.dataset.color) {
                 // Select a different piece
@@ -234,7 +235,9 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     
     const switchTurn = () => {
+        console.log(`Before switch: ${turn}`);  // Log before switching
         turn = turn === 'w' ? 'b' : 'w';
+        console.log(`After switch: ${turn}`);  // Log after switching
     };
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
