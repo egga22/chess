@@ -240,7 +240,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const promotionUI = document.createElement('div');
         promotionUI.setAttribute('class', 'promotion-ui');
         promotionUI.innerHTML = `
-            <p>Select a piece for promotion:</p>
             <div class="promotion-options">
                 <img src="images/queen-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'queen', '${pawn.id}')">
                 <img src="images/rook-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'rook', '${pawn.id}')">
@@ -253,10 +252,10 @@ document.addEventListener("DOMContentLoaded", () => {
     
     window.completePromotion = (color, type, id) => {
         const pawn = document.getElementById(id);
-        pawn.src = `images/${type}-${color}.svg`;
-        pawn.dataset.type = type;
-        document.body.removeChild(document.querySelector('.promotion-ui'));
-        switchTurn(); // Continue the game after promotion
+            pawn.src = `images/${type}-${color}.svg`;
+            pawn.dataset.type = type;
+            document.body.removeChild(document.querySelector('.promotion-ui'));
+            switchTurn(); // Ensure this is the only place it's called after a move
     };
     createBoard();
 });
