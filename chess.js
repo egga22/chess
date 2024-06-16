@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
-
     const createBoard = () => {
         const initialSetup = [
             ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
@@ -15,7 +14,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ["pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w"],
             ["rook-w", "knight-w", "bishop-w", "queen-w", "king-w", "bishop-w", "knight-w", "rook-w"]
         ];
-
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
@@ -24,7 +22,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 square.dataset.row = row;
                 square.dataset.col = col;
                 chessboard.appendChild(square);
-
                 if (initialSetup[row][col]) {
                     const piece = document.createElement('img');
                     piece.src = `images/${initialSetup[row][col]}.svg`;
@@ -35,17 +32,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     piece.id = `piece${row}${col}`; // Assign an ID to each piece
                     square.appendChild(piece);
                 }
-
                 // Ensure event listeners are attached
                 square.addEventListener('click', handleSquareClick);
             }
         }
     };
-
     const handleSquareClick = (event) => {
         const square = event.currentTarget;
         const piece = square.querySelector('.piece');
-
         if (selectedPiece) {
             if (selectedPiece.parentElement === square) {
                 // Deselect the piece
@@ -57,7 +51,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const col = parseInt(square.dataset.col);
                 const legalMoves = getLegalMoves(selectedPiece, parseInt(selectedPiece.parentElement.dataset.row), parseInt(selectedPiece.parentElement.dataset.col));
                 const isLegalMove = legalMoves.some(([r, c]) => r === row && c === col);
-
                 if (isLegalMove) {
                     movePiece(square);
                     removeMoveDots();
@@ -79,7 +72,6 @@ document.addEventListener("DOMContentLoaded", () => {
             showLegalMoves(piece, square);
         }
     };
-
     const movePiece = (square) => {
         const piece = selectedPiece;
         const targetPiece = square.querySelector('.piece');
@@ -87,11 +79,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const fromCol = parseInt(piece.parentElement.dataset.col);
         const toRow = parseInt(square.dataset.row);
         const toCol = parseInt(square.dataset.col);
-    
         if (targetPiece) {
             targetPiece.remove();
         }
-    
         // Handle castling
         if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) {
             const rookCol = toCol === 6 ? 7 : 0; // Rook's initial position
@@ -101,7 +91,6 @@ document.addEventListener("DOMContentLoaded", () => {
             rookTargetSquare.appendChild(rook);
             rook.dataset.moved = "true";
         }
-    
         // Handle en passant
         if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs(fromCol - toCol) === 1 && !targetPiece) {
             const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
@@ -109,12 +98,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 enemyPawn.remove();
             }
         }
-    
         square.appendChild(piece);
         piece.dataset.moved = "true";
-    
         lastMove = { piece, fromRow, fromCol, toRow, toCol };
-    
         if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
             promotePawn(piece);
         } else {
@@ -126,13 +112,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
     };
-
     const showLegalMoves = (piece, square) => {
         removeMoveDots();
         const row = parseInt(square.dataset.row);
         const col = parseInt(square.dataset.col);
         const possibleMoves = getLegalMoves(piece, row, col);
-
         possibleMoves.forEach(([r, c]) => {
             if (r >= 0 && r < 8 && c >= 0 && c < 8) {
                 const targetSquare = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
@@ -144,12 +128,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     };
-
     const getLegalMoves = (piece, row, col) => {
         const moves = [];
         const color = piece.dataset.color;
         const type = piece.dataset.type;
-
         switch (type) {
             case 'pawn':
                 const direction = color === 'w' ? -1 : 1;
@@ -213,7 +195,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return filterMovesThatAvoidCheck(piece, row, col, moves);
     };
-
     const filterMovesThatAvoidCheck = (piece, row, col, moves) => {
         return moves.filter(([toRow, toCol]) => {
             const boardCopy = createBoardCopy();
@@ -221,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
             return !isKingInCheck(boardCopy, piece.dataset.color);
         });
     };
-    
     const createBoardCopy = () => {
         const boardCopy = [];
         for (let row = 0; row < 8; row++) {
@@ -233,12 +213,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         return boardCopy;
     };
-    
     const makeMoveOnBoardCopy = (boardCopy, piece, fromRow, fromCol, toRow, toCol) => {
         boardCopy[toRow][toCol] = boardCopy[fromRow][fromCol];
         boardCopy[fromRow][fromCol] = null;
     };
-    
     const isKingInCheck = (boardCopy, color) => {
         let kingPosition = null;
         for (let row = 0; row < 8; row++) {
@@ -251,18 +229,15 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         if (!kingPosition) return false;
-    
         const [kingRow, kingCol] = kingPosition;
         return isSquareAttacked(boardCopy, kingRow, kingCol, color);
     };
-    
     const isSquareAttacked = (boardCopy, row, col, color) => {
         const opponentColor = color === 'w' ? 'b' : 'w';
         const directions = [
             [1, 0], [-1, 0], [0, 1], [0, -1], 
             [1, 1], [-1, -1], [1, -1], [-1, 1]
         ];
-    
         for (const [rowDir, colDir] of directions) {
             let r = row + rowDir;
             let c = col + colDir;
@@ -278,10 +253,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 c += colDir;
             }
         }
-    
         return false;
     };
-    
     const canAttack = (piece, toRow, toCol, fromRow, fromCol) => {
         const pieceType = piece.type;
         switch (pieceType) {
@@ -303,57 +276,43 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         return false;
     };
-    
     const checkForCheck = () => {
-        console.log('Checking for checks');
         // Remove highlights first
         removeKingInCheckHighlight('w');
         removeKingInCheckHighlight('b');
-        
         ['w', 'b'].forEach(color => {
             const boardCopy = createBoardCopy();
             if (isKingInCheck(boardCopy, color)) {
-                console.log(`${color} king is in check`);
                 highlightKingInCheck(color);
             } else {
-                console.log(`${color} king is not in check`);
                 // No need to call removeKingInCheckHighlight here as it was called earlier
             }
         });
     };
-    
     const highlightKingInCheck = (color) => {
-        console.log(`Highlighting ${color} king in check`);
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = document.querySelector(`[data-row='${row}'][data-col='${col}'] .piece`);
                 if (piece && piece.dataset.color === color && piece.dataset.type === 'king') {
                     const parent = piece.parentElement;
-                    console.log(`Found ${color} king at row ${row}, col ${col}`);
                     parent.classList.add('check');
-                    console.log(`After adding class:`, parent.classList);
                     setTimeout(() => {
-                        console.log(`Final class list for ${color} king:`, parent.classList);
                     }, 100); // Delay to check final class list
                     return;
                 }
             }
         }
     };
-    
     const removeKingInCheckHighlight = (color) => {
-        console.log(`Removing ${color} king check highlight`);
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
                 if (square.classList.contains('check')) {
-                    console.log(`Removing 'check' class from square at row ${row}, col ${col}`);
                 }
                 square.classList.remove('check');
             }
         }
     };
-    
     const isCheckmate = () => {
         const color = turn;
         for (let row = 0; row < 8; row++) {
@@ -369,23 +328,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         return true;
     };
-    
     const displayCheckmatePopup = () => {
         const winner = turn === 'w' ? 'Black' : 'White';
         alert(`${winner} wins by checkmate!`);
     };
-    
     const isEmptySquare = (row, col) => {
         const square = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
         return square && !square.querySelector('.piece');
     };
-    
     const isEnemyPiece = (row, col, color) => {
         const square = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
         const piece = square ? square.querySelector('.piece') : null;
         return piece && piece.dataset.color !== color;
     };
-    
     const addLinearMoves = (moves, row, col, color, rowDir, colDir) => {
         let r = row + rowDir;
         let c = col + colDir;
@@ -402,14 +357,12 @@ document.addEventListener("DOMContentLoaded", () => {
             c += colDir;
         }
     };
-    
     const addDiagonalMoves = (moves, row, col, color) => {
         addLinearMoves(moves, row, col, color, 1, 1);
         addLinearMoves(moves, row, col, color, -1, -1);
         addLinearMoves(moves, row, col, color, 1, -1);
         addLinearMoves(moves, row, col, color, -1, 1);
     };
-    
     const addKnightMoves = (moves, row, col, color) => {
         const knightMoves = [
             [row - 2, col - 1], [row - 2, col + 1],
@@ -425,7 +378,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     };
-    
     const addKingMoves = (moves, row, col, color) => {
         const kingMoves = [
             [row - 1, col], [row + 1, col],
@@ -445,13 +397,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const rookCol = direction === 1 ? 7 : 0; // Rook's column based on direction
         const step = direction === 1 ? 1 : -1;
         let emptyCheckCol = col + step;
-    
         // Check if the rook has moved or does not exist
         const rook = document.querySelector(`#piece${row}${rookCol}`);
         if (!rook || rook.dataset.type !== 'rook' || JSON.parse(rook.dataset.moved)) {
             return false;
         }
-    
         // Check if all squares between the king and rook are empty
         while (emptyCheckCol !== rookCol) {
             if (document.querySelector(`[data-row="${row}"][data-col="${emptyCheckCol}"] .piece`)) {
@@ -459,22 +409,17 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             emptyCheckCol += step;
         }
-    
         // Check if the king passes through or ends up in check
         // For simplicity, this example does not implement the check verification
         // You need to ensure these conditions are handled properly in your game logic
-    
         return true; // All conditions met for castling
     };
-    
     const removeMoveDots = () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
     };
-    
     const switchTurn = () => {
         turn = turn === 'w' ? 'b' : 'w';
     };
-    
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
         promotionUI.setAttribute('class', 'promotion-ui');
@@ -488,7 +433,6 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         document.body.appendChild(promotionUI);
     };
-    
     window.completePromotion = (color, type, id) => {
         const pawn = document.getElementById(id);
         pawn.src = `images/${type}-${color}.svg`;
@@ -501,6 +445,5 @@ document.addEventListener("DOMContentLoaded", () => {
             switchTurn();
         }
     };
-    
     createBoard();
 });
