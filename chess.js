@@ -65,8 +65,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     checkForCheck(); // Ensure this line is here
                     if (isCheckmate()) { // Ensure this block is here
                         displayCheckmatePopup();
-                    } else {
-                        switchTurn();
                     }
                 }
             } else if (piece && piece.dataset.color === selectedPiece.dataset.color) {
