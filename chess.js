@@ -317,29 +317,31 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const highlightKingInCheck = (color) => {
         console.log(`Highlighting ${color} king in check`);
-        let kingFound = false;
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = document.querySelector(`[data-row='${row}'][data-col='${col}'] .piece`);
                 if (piece && piece.dataset.color === color && piece.dataset.type === 'king') {
-                    kingFound = true;
                     const parent = piece.parentElement;
                     console.log(`Found ${color} king at row ${row}, col ${col}`);
                     parent.classList.add('check');
                     console.log(`After adding class:`, parent.classList);
-                    return; // Exit after finding and highlighting the king
+                    setTimeout(() => {
+                        console.log(`Final class list for ${color} king:`, parent.classList);
+                    }, 100); // Delay to check final class list
+                    return;
                 }
             }
-        }
-        if (!kingFound) {
-            console.log(`No ${color} king found on the board`);
         }
     };
     
     const removeKingInCheckHighlight = (color) => {
+        console.log(`Removing ${color} king check highlight`);
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.querySelector(`[data-row='${row}'][data-col='${col}']`);
+                if (square.classList.contains('check')) {
+                    console.log(`Removing 'check' class from square at row ${row}, col ${col}`);
+                }
                 square.classList.remove('check');
             }
         }
