@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const chessboard = document.getElementById('chessboard');
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
+    let lastMove = null; // To keep track of the last move
 
     const createBoard = () => {
         const initialSetup = [
@@ -45,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log(`Handling click, current turn: ${turn}`);
         const square = event.currentTarget;
         const piece = square.querySelector('.piece');
-    
+
         if (selectedPiece) {
             if (selectedPiece.parentElement === square) {
                 // Deselect the piece
@@ -57,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const col = parseInt(square.dataset.col);
                 const legalMoves = getLegalMoves(selectedPiece, parseInt(selectedPiece.parentElement.dataset.row), parseInt(selectedPiece.parentElement.dataset.col));
                 const isLegalMove = legalMoves.some(([r, c]) => r === row && c === col);
-    
+
                 if (isLegalMove) {
                     console.log(`Move is legal, current turn before move: ${turn}`);
                     movePiece(square);
@@ -85,11 +86,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const fromCol = parseInt(piece.parentElement.dataset.col);
         const toRow = parseInt(square.dataset.row);
         const toCol = parseInt(square.dataset.col);
-    
+
         if (targetPiece) {
             targetPiece.remove();
         }
-    
+
         // Handle castling
         if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) {
             const rookCol = toCol === 6 ? 7 : 0; // Rook's initial position
@@ -99,10 +100,20 @@ document.addEventListener("DOMContentLoaded", () => {
             rookTargetSquare.appendChild(rook);
             rook.dataset.moved = "true";
         }
-    
+
+        // Handle en passant
+        if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs(fromCol - toCol) === 1 && !targetPiece) {
+            const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
+            if (enemyPawn && enemyPawn.dataset.type === 'pawn' && enemyPawn.dataset.color !== piece.dataset.color && lastMove && lastMove.piece === enemyPawn && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
+                enemyPawn.remove();
+            }
+        }
+
         square.appendChild(piece);
         piece.dataset.moved = "true";
-    
+
+        lastMove = { piece, fromRow, fromCol, toRow, toCol };
+
         if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
             promotePawn(piece);
         } else {
@@ -132,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const moves = [];
         const color = piece.dataset.color;
         const type = piece.dataset.type;
-    
+
         switch (type) {
             case 'pawn':
                 const direction = color === 'w' ? -1 : 1;
@@ -151,6 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (isEnemyPiece(row + direction, col + 1, color)) {
                     moves.push([row + direction, col + 1]);
                 }
+                // En passant
                 if (lastMove && lastMove.piece.dataset.type === 'pawn' && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
                     if (lastMove.toRow === row && lastMove.toCol === col - 1) {
                         moves.push([row + direction, col - 1]);
@@ -180,7 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 addDiagonalMoves(moves, row, col, color);
                 break;
             case 'king':
-                addKingMoves(moves, row, col, color); // Existing king moves
+                addKingMoves(moves, row, col, color);
                 if (!JSON.parse(piece.dataset.moved)) { // Check if the king has not moved
                     // Castling to the right
                     if (canCastle(color, row, col, 1)) {
@@ -267,13 +279,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const rookCol = direction === 1 ? 7 : 0; // Rook's column based on direction
         const step = direction === 1 ? 1 : -1;
         let emptyCheckCol = col + step;
-    
+
         // Check if the rook has moved or does not exist
         const rook = document.querySelector(`#piece${row}${rookCol}`);
         if (!rook || rook.dataset.type !== 'rook' || JSON.parse(rook.dataset.moved)) {
             return false;
         }
-    
+
         // Check if all squares between the king and rook are empty
         while (emptyCheckCol !== rookCol) {
             if (document.querySelector(`[data-row="${row}"][data-col="${emptyCheckCol}"] .piece`)) {
@@ -281,23 +293,24 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             emptyCheckCol += step;
         }
-    
+
         // Check if the king passes through or ends up in check
         // For simplicity, this example does not implement the check verification
         // You need to ensure these conditions are handled properly in your game logic
-    
+
         return true; // All conditions met for castling
     };
 
     const removeMoveDots = () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
     };
-    
+
     const switchTurn = () => {
         console.log(`Before switch: ${turn}`);  // Log before switching
         turn = turn === 'w' ? 'b' : 'w';
         console.log(`After switch: ${turn}`);  // Log after switching
     };
+
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
         promotionUI.setAttribute('class', 'promotion-ui');
@@ -311,7 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         document.body.appendChild(promotionUI);
     };
-    
+
     window.completePromotion = (color, type, id) => {
         const pawn = document.getElementById(id);
         pawn.src = `images/${type}-${color}.svg`;
@@ -319,6 +332,6 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.removeChild(document.querySelector('.promotion-ui'));
         switchTurn();
     };
+
     createBoard();
-    
 });
