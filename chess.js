@@ -305,12 +305,19 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     
     const checkForCheck = () => {
+        console.log('Checking for checks');
+        // Remove highlights first
+        removeKingInCheckHighlight('w');
+        removeKingInCheckHighlight('b');
+        
         ['w', 'b'].forEach(color => {
             const boardCopy = createBoardCopy();
             if (isKingInCheck(boardCopy, color)) {
+                console.log(`${color} king is in check`);
                 highlightKingInCheck(color);
             } else {
-                removeKingInCheckHighlight(color);
+                console.log(`${color} king is not in check`);
+                // No need to call removeKingInCheckHighlight here as it was called earlier
             }
         });
     };
