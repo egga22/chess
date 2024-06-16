@@ -316,14 +316,23 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     
     const highlightKingInCheck = (color) => {
+        console.log(`Highlighting ${color} king in check`);
+        let kingFound = false;
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = document.querySelector(`[data-row='${row}'][data-col='${col}'] .piece`);
                 if (piece && piece.dataset.color === color && piece.dataset.type === 'king') {
-                    piece.parentElement.classList.add('check');
-                    return;
+                    kingFound = true;
+                    const parent = piece.parentElement;
+                    console.log(`Found ${color} king at row ${row}, col ${col}`);
+                    parent.classList.add('check');
+                    console.log(`After adding class:`, parent.classList);
+                    return; // Exit after finding and highlighting the king
                 }
             }
+        }
+        if (!kingFound) {
+            console.log(`No ${color} king found on the board`);
         }
     };
     
