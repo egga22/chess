@@ -151,6 +151,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (isEnemyPiece(row + direction, col + 1, color)) {
                     moves.push([row + direction, col + 1]);
                 }
+                if (lastMove && lastMove.piece.dataset.type === 'pawn' && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
+                    if (lastMove.toRow === row && lastMove.toCol === col - 1) {
+                        moves.push([row + direction, col - 1]);
+                    }
+                    if (lastMove.toRow === row && lastMove.toCol === col + 1) {
+                        moves.push([row + direction, col + 1]);
+                    }
+                }
                 break;
             case 'rook':
                 addLinearMoves(moves, row, col, color, 1, 0);
