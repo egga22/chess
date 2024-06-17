@@ -420,6 +420,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const switchTurn = () => {
         turn = turn === 'w' ? 'b' : 'w';
     };
+
+    function toggleBotSelection() {
+        var gameMode = document.getElementById('gameModeSelect').value;
+        var botSelection = document.getElementById('botSelection');
+        if (gameMode === 'bot') {
+            botSelection.style.display = 'block';
+        } else {
+            botSelection.style.display = 'none';
+        }
+    }
+
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
         promotionUI.setAttribute('class', 'promotion-ui');

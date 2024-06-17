@@ -1,10 +1,35 @@
 body {
+    font-family: 'Arial', sans-serif;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     height: 100vh;
-    background-color: #f0f0f0;
     margin: 0;
+    background: #f4f4f4;
+    color: #333;
+}
+
+#gameSettings {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#gameSettings label {
+    font-weight: bold;
+}
+
+#gameSettings select {
+    padding: 8px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    width: 200px;
+    font-size: 16px;
 }
 
 #chessboard {

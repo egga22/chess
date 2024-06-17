@@ -3,11 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Chess</title>
+    <title>Chess Game</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div id="gameSettings">
+        <label for="gameModeSelect">Game Mode:</label>
+        <select id="gameModeSelect" onchange="toggleBotSelection()">
+            <option value="human">Two Players</option>
+            <option value="bot">Single Player</option>
+        </select>
+    
+        <div id="botSelection" style="display: none;">
+            <label for="botSelect">Choose Bot:</label>
+            <select id="botSelect">
+                <option value="random">Random Move Bot</option>
+                <!-- Future bots can be added here -->
+            </select>
+        </div>
+    </div>
     <div id="chessboard"></div>
-    <script src="chess.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
