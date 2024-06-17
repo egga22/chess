@@ -1,9 +1,41 @@
 document.addEventListener("DOMContentLoaded", () => {
     const chessboard = document.getElementById('chessboard');
+    const selectionScreen = document.getElementById('selection-screen');
+    const twoPlayerBtn = document.getElementById('two-player-btn');
+    const onePlayerBtn = document.getElementById('one-player-btn');
+    const botSelection = document.getElementById('bot-selection');
+    const startGameBtn = document.getElementById('start-game-btn');
+
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
-    const createBoard = () => {
+    let gameMode = 'two-player'; // Default to two-player mode
+
+    twoPlayerBtn.addEventListener('click', () => {
+        gameMode = 'two-player';
+        botSelection.style.display = 'none';
+    });
+
+    onePlayerBtn.addEventListener('click', () => {
+        gameMode = 'one-player';
+        botSelection.style.display = 'block';
+    });
+
+    startGameBtn.addEventListener('click', () => {
+        selectionScreen.style.display = 'none';
+        chessboard.style.display = 'block';
+        createBoard(); // Initialize the board when the game starts
+        if (gameMode === 'one-player') {
+            setupBot();
+        }
+    });
+
+    function setupBot() {
+        console.log('Bot setup will be implemented here');
+        // Bot logic will be implemented here
+    }
+
+    function createBoard() {
         const initialSetup = [
             ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
             ["pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b"],
@@ -22,21 +54,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 square.dataset.row = row;
                 square.dataset.col = col;
                 chessboard.appendChild(square);
+
                 if (initialSetup[row][col]) {
                     const piece = document.createElement('img');
                     piece.src = `images/${initialSetup[row][col]}.svg`;
                     piece.classList.add('piece');
                     piece.dataset.color = initialSetup[row][col].split('-')[1];
                     piece.dataset.type = initialSetup[row][col].split('-')[0];
-                    piece.dataset.moved = false; // To track if a pawn has moved
-                    piece.id = `piece${row}${col}`; // Assign an ID to each piece
+                    piece.dataset.moved = false;
+                    piece.id = `piece${row}${col}`;
                     square.appendChild(piece);
                 }
-                // Ensure event listeners are attached
                 square.addEventListener('click', handleSquareClick);
             }
         }
-    };
+    }
     const handleSquareClick = (event) => {
         const square = event.currentTarget;
         const piece = square.querySelector('.piece');
