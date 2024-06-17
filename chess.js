@@ -9,8 +9,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     gameModeSelect.addEventListener('change', () => {
         gameMode = gameModeSelect.value;
-        botSelection.style.display = gameMode === 'bot' ? 'block' : 'none';
-        resetGame(); // Optional: Reset game state when changing modes
+        if (gameMode === 'singlePlayer') {
+            botSelection.style.display = 'block'; // Show the dropdown
+        } else {
+            botSelection.style.display = 'none'; // Hide the dropdown
+        }
+        resetGame(); // Optional: Reset the game state when changing modes
     });
 
     // Define resetGame function if not already defined
