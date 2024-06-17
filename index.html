@@ -3,27 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Game</title>
+    <title>Online Chess</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="selection-screen">
-        <h1>Select Game Mode</h1>
-        <div>
-            <button id="two-player-btn">Two Players</button>
-        </div>
-        <div>
-            <button id="one-player-btn">One Player</button>
-            <div id="bot-selection" style="display: none;">
-                <label for="bot-level">Select Bot:</label>
-                <select id="bot-level">
-                    <option value="random">Random Move Bot</option>
-                </select>
-            </div>
-        </div>
-        <button id="start-game-btn">Start Game</button>
-    </div>
-    <div id="chessboard" style="display: none;"></div>
+    <div id="chessboard"></div>
     <script src="chess.js"></script>
 </body>
 </html>
