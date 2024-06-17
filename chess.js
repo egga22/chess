@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     gameModeSelect.addEventListener('change', () => {
         gameMode = gameModeSelect.value;
-        if (gameMode === 'singlePlayer') {
+        if (gameMode === 'onePlayer') {
             botSelection.style.display = 'block'; // Show the dropdown
         } else {
             botSelection.style.display = 'none'; // Hide the dropdown
