@@ -7,22 +7,20 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="gameSettings">
-        <label for="gameModeSelect">Game Mode:</label>
-        <select id="gameModeSelect" onchange="toggleBotSelection()">
+    <div id="gameSettings" class="settings-container">
+        <label for="gameModeSelect">Select Game Mode:</label>
+        <select id="gameModeSelect">
             <option value="human">Two Players</option>
-            <option value="bot">Single Player</option>
+            <option value="bot">One Player</option>
         </select>
-    
         <div id="botSelection" style="display: none;">
-            <label for="botSelect">Choose Bot:</label>
+            <label for="botSelect">Select Bot:</label>
             <select id="botSelect">
                 <option value="random">Random Move Bot</option>
-                <!-- Future bots can be added here -->
             </select>
         </div>
     </div>
-    <div id="chessboard"></div>
-    <script src="script.js"></script>
+    <div id="chessboard" class="chessboard-container"></div>
+    <script src="chess.js"></script>
 </body>
 </html>

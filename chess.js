@@ -1,8 +1,22 @@
 document.addEventListener("DOMContentLoaded", () => {
     const chessboard = document.getElementById('chessboard');
+    const gameModeSelect = document.getElementById('gameModeSelect');
+    const botSelection = document.getElementById('botSelection');
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
+    let gameMode = 'human'; // Default game mode
+
+    gameModeSelect.addEventListener('change', () => {
+        gameMode = gameModeSelect.value;
+        botSelection.style.display = gameMode === 'bot' ? 'block' : 'none';
+        resetGame(); // Optional: Reset game state when changing modes
+    });
+
+    // Define resetGame function if not already defined
+    const resetGame = () => {
+        // Logic to reset the game state
+    };
     const createBoard = () => {
         const initialSetup = [
             ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
