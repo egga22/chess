@@ -1,6 +1,6 @@
 body {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
     height: 100vh;
     background-color: #f0f0f0;
@@ -8,11 +8,14 @@ body {
 }
 
 .settings-container {
-    margin-bottom: 20px;
+    width: 100%;
     padding: 10px;
     background: white;
     border-radius: 5px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
 }
 
 .settings-container label {
@@ -65,6 +68,7 @@ body {
     transform: translate(-50%, -50%);
     pointer-events: none;
 }
+
 .promotion-ui {
     position: fixed;
     top: 50%;
@@ -92,6 +96,7 @@ body {
     height: 100%;
     cursor: pointer;
 }
+
 .check {
     background-color: red !important;
 }

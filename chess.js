@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
-    let gameMode = 'human'; // Default game mode
+    let gameMode = 'twoPlayer'; // Default game mode
 
     gameModeSelect.addEventListener('change', () => {
         gameMode = gameModeSelect.value;
@@ -15,7 +15,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Define resetGame function if not already defined
     const resetGame = () => {
-        // Logic to reset the game state
+        chessboard.innerHTML = '';
+        createBoard();
+        selectedPiece = null;
+        turn = 'w';
+        lastMove = null;
     };
     const createBoard = () => {
         const initialSetup = [
