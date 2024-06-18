@@ -88,6 +88,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 selectedPiece = piece;
                 showLegalMoves(piece, square);
             }
+            if (gameMode === 'onePlayer' && turn === 'b') {
+                setTimeout(botMove, 500); // Delay the bot's move for better UX
+            }
         } else if (piece && piece.dataset.color === turn) {
             // Select the piece
             selectedPiece = piece;
@@ -239,6 +242,50 @@ document.addEventListener("DOMContentLoaded", () => {
         boardCopy[toRow][toCol] = boardCopy[fromRow][fromCol];
         boardCopy[fromRow][fromCol] = null;
     };
+
+    const botMove = () => {
+        if (turn !== 'b') return; // Assuming the bot plays as black
+    
+        const pieces = Array.from(document.querySelectorAll('.piece')).filter(p => p.dataset.color === 'b');
+        let allMoves = [];
+    
+        pieces.forEach(piece => {
+            const row = parseInt(piece.parentElement.dataset.row);
+            const col = parseInt(piece.parentElement.dataset.col);
+            const legalMoves = getLegalMoves(piece, row, col);
+            legalMoves.forEach(move => {
+                allMoves.push({ piece, toRow: move[0], toCol: move[1] });
+            });
+        });
+    
+        if (allMoves.length > 0) {
+            const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+            movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
+        }
+    };
+    
+    const movePieceToSquare = (piece, toRow, toCol) => {
+        const fromSquare = piece.parentElement;
+        const toSquare = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
+    
+        // Handle potential capture
+        const targetPiece = toSquare.querySelector('.piece');
+        if (targetPiece) {
+            targetPiece.remove(); // Capture the piece
+        }
+    
+        // Move piece to new square
+        toSquare.appendChild(piece);
+    
+        // Post-move operations
+        checkForCheck();
+        if (isCheckmate()) {
+            displayCheckmatePopup();
+        } else {
+            switchTurn(); // Change turn to white
+        }
+    };
+
     const isKingInCheck = (boardCopy, color) => {
         let kingPosition = null;
         for (let row = 0; row < 8; row++) {
