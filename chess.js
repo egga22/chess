@@ -286,20 +286,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    const isKingInCheck = (boardCopy, color) => {
-        let kingPosition = null;
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const piece = boardCopy[row][col];
-                if (piece && piece.type === 'king' && piece.color === color) {
-                    kingPosition = [row, col];
-                    break;
-                }
-            }
-        }
-        if (!kingPosition) return false;
-        const [kingRow, kingCol] = kingPosition;
-        return isSquareAttacked(boardCopy, kingRow, kingCol, color);
+    const isKingInCheck = (color) => {
+        const king = document.querySelector(`.piece.king[data-color='${color}']`);
+        const kingRow = parseInt(king.parentElement.dataset.row);
+        const kingCol = parseInt(king.parentElement.dataset.col);
+    
+        return isSquareAttacked(kingRow, kingCol, color);
     };
     const isSquareAttacked = (boardCopy, row, col, color) => {
         const opponentColor = color === 'w' ? 'b' : 'w';
@@ -383,17 +375,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
     const isCheckmate = () => {
-        const color = turn;
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const piece = document.querySelector(`[data-row='${row}'][data-col='${col}'] .piece`);
-                if (piece && piece.dataset.color === color) {
-                    const legalMoves = getLegalMoves(piece, row, col);
-                    if (legalMoves.length > 0) {
-                        return false;
-                    }
-                }
-            }
+        const opponentColor = turn === 'w' ? 'b' : 'w';
+        const pieces = Array.from(document.querySelectorAll(`.piece[data-color='${opponentColor}']`));
+        for (let piece of pieces) {
+            let moves = getLegalMoves(piece, parseInt(piece.parentElement.dataset.row), parseInt(piece.parentElement.dataset.col));
+            if (moves.length > 0) return false;
         }
         return true;
     };
@@ -500,18 +486,26 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    const promotePawn = (pawn) => {
+    const promotePawn = (pawn, toRow, toCol) => {
         const promotionUI = document.createElement('div');
-        promotionUI.setAttribute('class', 'promotion-ui');
-        promotionUI.innerHTML = `
-            <div class="promotion-options">
-                <img src="images/queen-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'queen', '${pawn.id}')">
-                <img src="images/rook-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'rook', '${pawn.id}')">
-                <img src="images/bishop-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'bishop', '${pawn.id}')">
-                <img src="images/knight-${pawn.dataset.color}.svg" onclick="completePromotion('${pawn.dataset.color}', 'knight', '${pawn.id}')">
-            </div>
-        `;
+        promotionUI.innerHTML = `<div class="promotion-options">Choose piece for promotion:</div>`;
+        ['queen', 'rook', 'bishop', 'knight'].forEach(type => {
+            let img = document.createElement('img');
+            img.src = `images/${type}-${pawn.dataset.color}.svg`;
+            img.addEventListener('click', () => {
+                completePromotion(pawn, type, toRow, toCol);
+                document.body.removeChild(promotionUI);
+            });
+            promotionUI.appendChild(img);
+        });
         document.body.appendChild(promotionUI);
+    };
+    
+    const completePromotion = (pawn, type, toRow, toCol) => {
+        pawn.src = `images/${type}-${pawn.dataset.color}.svg`;
+        pawn.dataset.type = type;
+        movePieceToSquare(pawn, toRow, toCol);
+        setTimeout(() => { if (isCheckmate()) displayCheckmatePopup(); }, 100);
     };
     window.completePromotion = (color, type, id) => {
         const pawn = document.getElementById(id);
