@@ -138,11 +138,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
             promotePawn(piece);
         } else {
-            checkForCheck(); // Ensure this line is here
-            if (isCheckmate()) { // Ensure this block is here
+            checkForCheck();
+            if (isCheckmate()) {
                 displayCheckmatePopup();
             } else {
-                switchTurn();
+                switchTurn(); // 🔥 Ensure the turn is switched after a move
             }
         }
     };
@@ -253,7 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const botMove = () => {
-        if (turn !== 'b') return; // Bot only moves when it's black's turn
+        if (gameMode !== "onePlayer" || turn !== "b") return; // Only run if in bot mode and it's Black's turn
     
         const pieces = Array.from(document.querySelectorAll('.piece'))
             .filter(p => p.dataset.color === 'b');
@@ -264,7 +264,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const row = parseInt(piece.parentElement.dataset.row);
             const col = parseInt(piece.parentElement.dataset.col);
             const legalMoves = getLegalMoves(piece, row, col);
-            
+    
             legalMoves.forEach(move => {
                 allMoves.push({ piece, toRow: move[0], toCol: move[1] });
             });
@@ -511,6 +511,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const switchTurn = () => {
         turn = turn === 'w' ? 'b' : 'w';
+    
+        // If it's one-player mode and it's Black's turn, let the bot move
+        if (gameMode === "onePlayer" && turn === "b") {
+            setTimeout(botMove, 500); // Slight delay for better UX
+        }
     };
 
     function toggleBotSelection() {
