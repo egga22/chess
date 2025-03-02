@@ -469,14 +469,16 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
     const canCastle = (color, row, col, direction) => {
-        const rookCol = direction === 1 ? 7 : 0; // Rook's column based on direction
+        const rookCol = direction === 1 ? 7 : 0; // Right rook or left rook
         const step = direction === 1 ? 1 : -1;
         let emptyCheckCol = col + step;
+    
         // Check if the rook has moved or does not exist
-        const rook = document.querySelector(`#piece${row}${rookCol}`);
+        const rook = document.querySelector(`[data-row="${row}"][data-col="${rookCol}"] .piece`);
         if (!rook || rook.dataset.type !== 'rook' || JSON.parse(rook.dataset.moved)) {
             return false;
         }
+    
         // Check if all squares between the king and rook are empty
         while (emptyCheckCol !== rookCol) {
             if (document.querySelector(`[data-row="${row}"][data-col="${emptyCheckCol}"] .piece`)) {
@@ -484,10 +486,16 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             emptyCheckCol += step;
         }
-        // Check if the king passes through or ends up in check
-        // For simplicity, this example does not implement the check verification
-        // You need to ensure these conditions are handled properly in your game logic
-        return true; // All conditions met for castling
+    
+        // Check if the king is in check, or if it moves through check
+        for (let i = 0; i <= 2; i++) {
+            let tempCol = col + (i * step);
+            if (isSquareAttacked(createBoardCopy(), row, tempCol, color)) {
+                return false; // King cannot move through or into check
+            }
+        }
+    
+        return true; // Castling is allowed
     };
     const removeMoveDots = () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
