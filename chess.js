@@ -244,24 +244,30 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const botMove = () => {
-        if (turn !== 'b') return; // Assuming the bot plays as black
+        if (turn !== 'b') return; // Bot only moves when it's black's turn
     
-        const pieces = Array.from(document.querySelectorAll('.piece')).filter(p => p.dataset.color === 'b');
+        const pieces = Array.from(document.querySelectorAll('.piece'))
+            .filter(p => p.dataset.color === 'b');
+    
         let allMoves = [];
     
         pieces.forEach(piece => {
             const row = parseInt(piece.parentElement.dataset.row);
             const col = parseInt(piece.parentElement.dataset.col);
             const legalMoves = getLegalMoves(piece, row, col);
+            
             legalMoves.forEach(move => {
                 allMoves.push({ piece, toRow: move[0], toCol: move[1] });
             });
         });
     
-        if (allMoves.length > 0) {
-            const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-            movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
+        if (allMoves.length === 0) {
+            alert("Game over! White wins by checkmate or stalemate.");
+            return;
         }
+    
+        const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+        movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
     
     const movePieceToSquare = (piece, toRow, toCol) => {
