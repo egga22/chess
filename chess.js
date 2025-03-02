@@ -7,14 +7,14 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastMove = null; // To keep track of the last move
     let gameMode = 'twoPlayer'; // Default game mode
 
-    gameModeSelect.addEventListener('change', () => {
+    gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
-        if (gameMode === 'onePlayer') {
-            botSelection.style.display = 'block'; // Show the dropdown
+        if (gameMode === "onePlayer") {
+            botSelection.style.display = "block"; // Show bot difficulty dropdown
         } else {
-            botSelection.style.display = 'none'; // Hide the dropdown
+            botSelection.style.display = "none"; // Hide dropdown in two-player mode
         }
-        resetGame(); // Optional: Reset the game state when changing modes
+        resetGame(); // Reset the game when switching modes
     });
 
     // Define resetGame function if not already defined
@@ -61,7 +61,10 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const handleSquareClick = (event) => {
         const square = event.currentTarget;
-        const piece = square.querySelector('.piece');
+        const piece = square.querySelector(".piece");
+    
+        if (gameMode === "onePlayer" && turn === "b") return; // Prevent player from moving black in bot mode
+    
         if (selectedPiece) {
             if (selectedPiece.parentElement === square) {
                 // Deselect the piece
@@ -71,15 +74,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Check if the move is legal
                 const row = parseInt(square.dataset.row);
                 const col = parseInt(square.dataset.col);
-                const legalMoves = getLegalMoves(selectedPiece, parseInt(selectedPiece.parentElement.dataset.row), parseInt(selectedPiece.parentElement.dataset.col));
+                const legalMoves = getLegalMoves(
+                    selectedPiece,
+                    parseInt(selectedPiece.parentElement.dataset.row),
+                    parseInt(selectedPiece.parentElement.dataset.col)
+                );
                 const isLegalMove = legalMoves.some(([r, c]) => r === row && c === col);
                 if (isLegalMove) {
                     movePiece(square);
                     removeMoveDots();
                     selectedPiece = null;
                     checkForCheck(); // Ensure this line is here
-                    if (isCheckmate()) { // Ensure this block is here
+                    if (isCheckmate()) {
                         displayCheckmatePopup();
+                    } else {
+                        switchTurn();
+                        if (gameMode === "onePlayer" && turn === "b") {
+                            setTimeout(botMove, 500); // Bot moves automatically after white
+                        }
                     }
                 }
             } else if (piece && piece.dataset.color === selectedPiece.dataset.color) {
@@ -87,9 +99,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 removeMoveDots();
                 selectedPiece = piece;
                 showLegalMoves(piece, square);
-            }
-            if (gameMode === 'onePlayer' && turn === 'b') {
-                setTimeout(botMove, 500); // Delay the bot's move for better UX
             }
         } else if (piece && piece.dataset.color === turn) {
             // Select the piece
