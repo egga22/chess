@@ -507,13 +507,8 @@ document.addEventListener("DOMContentLoaded", () => {
     function toggleBotSelection() {
         var gameMode = document.getElementById('gameModeSelect').value;
         var botSelection = document.getElementById('botSelection');
-        if (gameMode === 'bot') {
-            botSelection.style.display = 'block';
-        } else {
-            botSelection.style.display = 'none';
-        }
+        botSelection.style.display = gameMode === 'bot' ? 'block' : 'none';
     }
-
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
         promotionUI.setAttribute('class', 'promotion-ui');
