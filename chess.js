@@ -135,14 +135,15 @@ document.addEventListener("DOMContentLoaded", () => {
         square.appendChild(piece);
         piece.dataset.moved = "true";
         lastMove = { piece, fromRow, fromCol, toRow, toCol };
-        if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
+        iif (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
             promotePawn(piece);
         } else {
             checkForCheck();
             if (isCheckmate()) {
                 displayCheckmatePopup();
             } else {
-                switchTurn(); // 🔥 Ensure the turn is switched after a move
+                console.log("Calling switchTurn() from movePiece()"); // Debugging log
+                switchTurn();
             }
         }
     };
@@ -253,7 +254,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const botMove = () => {
-        if (gameMode !== "onePlayer" || turn !== "b") return; // Only run if in bot mode and it's Black's turn
+        if (gameMode !== "onePlayer" || turn !== "b") {
+            console.log("Bot move skipped: gameMode =", gameMode, ", turn =", turn); // Debugging log
+            return;
+        }
+    
+        console.log("Bot move executing..."); // Debugging log
     
         const pieces = Array.from(document.querySelectorAll('.piece'))
             .filter(p => p.dataset.color === 'b');
@@ -276,6 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     
         const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+        console.log("Bot moving piece:", randomMove.piece.dataset.type, "to", randomMove.toRow, randomMove.toCol); // Debugging log
         movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
     
@@ -511,10 +518,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const switchTurn = () => {
         turn = turn === 'w' ? 'b' : 'w';
+        console.log("Turn switched to:", turn); // Debugging log
     
-        // If it's one-player mode and it's Black's turn, let the bot move
+        // If in one-player mode and it's Black's turn, make the bot move
         if (gameMode === "onePlayer" && turn === "b") {
-            setTimeout(botMove, 500); // Slight delay for better UX
+            console.log("Bot move triggered!"); // Debugging log
+            setTimeout(botMove, 500); // Give a delay so it’s visually clear
         }
     };
 
