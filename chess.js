@@ -25,40 +25,49 @@ document.addEventListener("DOMContentLoaded", () => {
         turn = 'w';
         lastMove = null;
     };
-    const createBoard = () => {
-        const initialSetup = [
+    function createBoard() {
+        const chessboard = document.getElementById('chessboard');
+        chessboard.innerHTML = ''; // Clear existing board
+        chessboard.style.display = "grid";
+        chessboard.style.gridTemplateColumns = "repeat(8, 70px)";
+        chessboard.style.gridTemplateRows = "repeat(8, 70px)";
+        chessboard.style.width = "560px";
+        chessboard.style.height = "560px";
+        chessboard.style.border = "2px solid black";
+        
+        const initialBoard = [
             ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
             ["pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b"],
-            [],
-            [],
-            [],
-            [],
+            [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null],
             ["pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w"],
             ["rook-w", "knight-w", "bishop-w", "queen-w", "king-w", "bishop-w", "knight-w", "rook-w"]
         ];
+    
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
-                square.classList.add('square');
-                square.classList.add((row + col) % 2 === 0 ? 'white' : 'black');
-                square.dataset.row = row;
-                square.dataset.col = col;
-                chessboard.appendChild(square);
-                if (initialSetup[row][col]) {
+                square.style.width = "70px";
+                square.style.height = "70px";
+                square.style.display = "flex";
+                square.style.alignItems = "center";
+                square.style.justifyContent = "center";
+                square.style.backgroundColor = (row + col) % 2 === 0 ? "#f0d9b5" : "#b58863";
+                
+                if (initialBoard[row][col]) {
                     const piece = document.createElement('img');
-                    piece.src = `images/${initialSetup[row][col]}.svg`;
-                    piece.classList.add('piece');
-                    piece.dataset.color = initialSetup[row][col].split('-')[1];
-                    piece.dataset.type = initialSetup[row][col].split('-')[0];
-                    piece.dataset.moved = false; // To track if a pawn has moved
-                    piece.id = `piece${row}${col}`; // Assign an ID to each piece
+                    piece.src = `images/${initialBoard[row][col]}.svg`;
+                    piece.style.width = "70px";
+                    piece.style.height = "70px";
                     square.appendChild(piece);
                 }
-                // Ensure event listeners are attached
-                square.addEventListener('click', handleSquareClick);
+                
+                chessboard.appendChild(square);
             }
         }
-    };
+    }
     const handleSquareClick = (event) => {
         const square = event.currentTarget;
         const piece = square.querySelector(".piece");
@@ -135,7 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
         square.appendChild(piece);
         piece.dataset.moved = "true";
         lastMove = { piece, fromRow, fromCol, toRow, toCol };
-        iif (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
+        if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
             promotePawn(piece);
         } else {
             checkForCheck();
