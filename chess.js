@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
         chessboard.style.width = "560px";
         chessboard.style.height = "560px";
         chessboard.style.border = "2px solid black";
-        
+    
         const initialBoard = [
             ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
             ["pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b"],
@@ -55,15 +55,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 square.style.alignItems = "center";
                 square.style.justifyContent = "center";
                 square.style.backgroundColor = (row + col) % 2 === 0 ? "#f0d9b5" : "#b58863";
-                
+    
+                // 🔹 **Add row and column data for movement logic**
+                square.dataset.row = row;
+                square.dataset.col = col;
+    
                 if (initialBoard[row][col]) {
                     const piece = document.createElement('img');
                     piece.src = `images/${initialBoard[row][col]}.svg`;
                     piece.style.width = "70px";
                     piece.style.height = "70px";
+    
+                    // 🔹 **Add class and data attributes for movement logic**
+                    piece.classList.add("piece");
+                    piece.dataset.color = initialBoard[row][col].includes("-w") ? "w" : "b";
+                    piece.dataset.type = initialBoard[row][col].split("-")[0];
+    
                     square.appendChild(piece);
                 }
-                
+    
+                square.addEventListener('click', handleSquareClick);
                 chessboard.appendChild(square);
             }
         }
