@@ -65,12 +65,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     piece.src = `images/${initialBoard[row][col]}.svg`;
                     piece.style.width = "70px";
                     piece.style.height = "70px";
-    
+
                     // 🔹 **Add class and data attributes for movement logic**
                     piece.classList.add("piece");
                     piece.dataset.color = initialBoard[row][col].includes("-w") ? "w" : "b";
                     piece.dataset.type = initialBoard[row][col].split("-")[0];
-    
+                    piece.dataset.moved = "false";
+                    piece.id = `piece${row}${col}`;
+
                     square.appendChild(piece);
                 }
     
@@ -162,7 +164,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isCheckmate()) {
                 displayCheckmatePopup();
             } else {
-                console.log("Calling switchTurn() from movePiece()"); // Debugging log
                 switchTurn();
             }
         }
@@ -275,11 +276,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const botMove = () => {
         if (gameMode !== "onePlayer" || turn !== "b") {
-            console.log("Bot move skipped: gameMode =", gameMode, ", turn =", turn); // Debugging log
             return;
         }
-    
-        console.log("Bot move executing..."); // Debugging log
+
     
         const pieces = Array.from(document.querySelectorAll('.piece'))
             .filter(p => p.dataset.color === 'b');
@@ -302,7 +301,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     
         const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-        console.log("Bot moving piece:", randomMove.piece.dataset.type, "to", randomMove.toRow, randomMove.toCol); // Debugging log
         movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
     
@@ -426,6 +424,8 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const isCheckmate = () => {
         const color = turn;
+        const boardCopy = createBoardCopy();
+        const inCheck = isKingInCheck(boardCopy, color);
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = document.querySelector(`[data-row='${row}'][data-col='${col}'] .piece`);
@@ -437,7 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         }
-        return true;
+        return inCheck;
     };
     const displayCheckmatePopup = () => {
         const winner = turn === 'w' ? 'Black' : 'White';
@@ -538,20 +538,18 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const switchTurn = () => {
         turn = turn === 'w' ? 'b' : 'w';
-        console.log("Turn switched to:", turn); // Debugging log
     
         // If in one-player mode and it's Black's turn, make the bot move
         if (gameMode === "onePlayer" && turn === "b") {
-            console.log("Bot move triggered!"); // Debugging log
             setTimeout(botMove, 500); // Give a delay so it’s visually clear
         }
     };
 
-    function toggleBotSelection() {
+    window.toggleBotSelection = function() {
         var gameMode = document.getElementById('gameModeSelect').value;
         var botSelection = document.getElementById('botSelection');
-        botSelection.style.display = gameMode === 'bot' ? 'block' : 'none';
-    }
+        botSelection.style.display = gameMode === 'onePlayer' ? 'block' : 'none';
+    };
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
         promotionUI.setAttribute('class', 'promotion-ui');
@@ -570,16 +568,14 @@ document.addEventListener("DOMContentLoaded", () => {
         pawn.src = `images/${type}-${color}.svg`;
         pawn.dataset.type = type;
         document.body.removeChild(document.querySelector('.promotion-ui'));
-        checkForCheck(); // Add this line
-        if (isCheckmate()) { // Add this block
+        checkForCheck();
+        if (isCheckmate()) {
             displayCheckmatePopup();
         } else {
             switchTurn();
         }
     };
     createBoard();
+    toggleBotSelection();
 });
 
-
-//Comment
-//extra secret comment
