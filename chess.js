@@ -54,6 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 square.style.display = "flex";
                 square.style.alignItems = "center";
                 square.style.justifyContent = "center";
+                square.style.position = "relative";
                 square.style.backgroundColor = (row + col) % 2 === 0 ? "#f0d9b5" : "#b58863";
     
                 // 🔹 **Add row and column data for movement logic**
