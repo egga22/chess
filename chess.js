@@ -160,6 +160,13 @@ document.addEventListener("DOMContentLoaded", () => {
         lastMove = { piece, fromRow, fromCol, toRow, toCol };
         if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
             promotePawn(piece);
+        } else {
+            checkForCheck();
+            if (isCheckmate()) {
+                displayCheckmatePopup();
+            } else {
+                switchTurn();
+            }
         }
     };
     const showLegalMoves = (piece, square) => {
