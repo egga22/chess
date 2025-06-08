@@ -54,6 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 square.style.display = "flex";
                 square.style.alignItems = "center";
                 square.style.justifyContent = "center";
+                square.style.position = "relative"; // Allow absolute dots
                 square.style.backgroundColor = (row + col) % 2 === 0 ? "#f0d9b5" : "#b58863";
     
                 // 🔹 **Add row and column data for movement logic**
@@ -106,14 +107,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     movePiece(square);
                     removeMoveDots();
                     selectedPiece = null;
-                    checkForCheck(); // Ensure this line is here
-                    if (isCheckmate()) {
-                        displayCheckmatePopup();
-                    } else {
-                        switchTurn();
-                        if (gameMode === "onePlayer" && turn === "b") {
-                            setTimeout(botMove, 500); // Bot moves automatically after white
-                        }
+                    if (gameMode === "onePlayer" && turn === "b") {
+                        setTimeout(botMove, 500);
                     }
                 }
             } else if (piece && piece.dataset.color === selectedPiece.dataset.color) {
