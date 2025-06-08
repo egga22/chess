@@ -423,7 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
     const isCheckmate = () => {
-        const color = turn;
+        const color = turn === 'w' ? 'b' : 'w';
         const boardCopy = createBoardCopy();
         const inCheck = isKingInCheck(boardCopy, color);
         for (let row = 0; row < 8; row++) {
