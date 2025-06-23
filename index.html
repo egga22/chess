@@ -16,12 +16,17 @@
     </div>
 
     <div id="botSelection" style="display: none;">
-        <label for="botDifficulty">Bot Difficulty:</label>
+        <label for="botDifficulty">Bot:</label>
         <select id="botDifficulty">
             <option value="random">Random Moves</option>
+            <option value="stockfish">Stockfish</option>
         </select>
     </div>
-    <div id="chessboard"></div>
+    <div id="boardArea">
+        <div id="chessboard"></div>
+        <div id="evalBar"><div id="evalFill"></div></div>
+    </div>
+    <script src="stockfish.js"></script>
     <script src="chess.js"></script>
 </body>
 </html>

@@ -2,10 +2,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const chessboard = document.getElementById('chessboard');
     const gameModeSelect = document.getElementById('gameModeSelect');
     const botSelection = document.getElementById('botSelection');
+    const botDifficultySelect = document.getElementById('botDifficulty');
+
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
     let gameMode = 'twoPlayer'; // Default game mode
+    let botDifficulty = botDifficultySelect.value;
+    let fullmoveNumber = 1;
+    let engine;
+    const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
@@ -17,6 +23,10 @@ document.addEventListener("DOMContentLoaded", () => {
         resetGame(); // Reset the game when switching modes
     });
 
+    botDifficultySelect.addEventListener('change', () => {
+        botDifficulty = botDifficultySelect.value;
+    });
+
     // Define resetGame function if not already defined
     const resetGame = () => {
         chessboard.innerHTML = '';
@@ -24,6 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
         selectedPiece = null;
         turn = 'w';
         lastMove = null;
+        fullmoveNumber = 1;
+        evaluateBoard();
     };
     function createBoard() {
         const chessboard = document.getElementById('chessboard');
@@ -46,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ["rook-w", "knight-w", "bishop-w", "queen-w", "king-w", "bishop-w", "knight-w", "rook-w"]
         ];
     
+        const files = 'abcdefgh';
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
@@ -76,7 +89,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     square.appendChild(piece);
                 }
-    
+                if (row === 7) {
+                    const fileLabel = document.createElement('span');
+                    fileLabel.className = 'file-label';
+                    fileLabel.textContent = files[col];
+                    square.appendChild(fileLabel);
+                }
+                if (col === 0) {
+                    const rankLabel = document.createElement('span');
+                    rankLabel.className = 'rank-label';
+                    rankLabel.textContent = 8 - row;
+                    square.appendChild(rankLabel);
+                }
+
                 square.addEventListener('click', handleSquareClick);
                 chessboard.appendChild(square);
             }
@@ -162,6 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 switchTurn();
             }
         }
+        evaluateBoard();
     };
     const showLegalMoves = (piece, square) => {
         removeMoveDots();
@@ -269,37 +295,79 @@ document.addEventListener("DOMContentLoaded", () => {
         boardCopy[fromRow][fromCol] = null;
     };
 
+    const initStockfish = () => {
+        engine = new Worker('stockfish.js');
+        engine.onmessage = (e) => {
+            const line = e.data;
+            const scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+            if (scoreMatch) {
+                const value = scoreMatch[1] === 'cp' ? parseInt(scoreMatch[2], 10) : (parseInt(scoreMatch[2],10) > 0 ? 10000 : -10000);
+                updateEvalBar(value);
+            }
+            if (line.startsWith('bestmove') && engine.bestMoveCallback) {
+                const move = line.split(' ')[1];
+                engine.bestMoveCallback(move);
+                engine.bestMoveCallback = null;
+            }
+        };
+    };
+
+    const requestStockfish = (callback) => {
+        if (!engine) return;
+        engine.bestMoveCallback = callback || null;
+        const fen = generateFEN();
+        engine.postMessage('position fen ' + fen);
+        engine.postMessage('go depth 12');
+    };
+
     const botMove = () => {
         if (gameMode !== "onePlayer" || turn !== "b") {
             return;
         }
 
-    
-        const pieces = Array.from(document.querySelectorAll('.piece'))
-            .filter(p => p.dataset.color === 'b');
-    
-        let allMoves = [];
-    
-        pieces.forEach(piece => {
-            const row = parseInt(piece.parentElement.dataset.row);
-            const col = parseInt(piece.parentElement.dataset.col);
-            const legalMoves = getLegalMoves(piece, row, col);
-    
-            legalMoves.forEach(move => {
-                allMoves.push({ piece, toRow: move[0], toCol: move[1] });
+        if (botDifficulty === 'stockfish') {
+            requestStockfish(best => {
+                if (!best) return;
+                const fromFile = best[0];
+                const fromRank = best[1];
+                const toFile = best[2];
+                const toRank = best[3];
+                const fromRow = 8 - parseInt(fromRank);
+                const fromCol = 'abcdefgh'.indexOf(fromFile);
+                const toRow = 8 - parseInt(toRank);
+                const toCol = 'abcdefgh'.indexOf(toFile);
+                const piece = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"] .piece`);
+                if (piece) {
+                    movePieceToSquare(piece, toRow, toCol, best[4]);
+                }
             });
-        });
-    
-        if (allMoves.length === 0) {
-            alert("Game over! White wins by checkmate or stalemate.");
-            return;
+        } else {
+            const pieces = Array.from(document.querySelectorAll('.piece'))
+                .filter(p => p.dataset.color === 'b');
+
+            let allMoves = [];
+
+            pieces.forEach(piece => {
+                const row = parseInt(piece.parentElement.dataset.row);
+                const col = parseInt(piece.parentElement.dataset.col);
+                const legalMoves = getLegalMoves(piece, row, col);
+
+                legalMoves.forEach(move => {
+                    allMoves.push({ piece, toRow: move[0], toCol: move[1] });
+                });
+            });
+
+            if (allMoves.length === 0) {
+                alert("Game over! White wins by checkmate or stalemate.");
+                return;
+            }
+
+            const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+            movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
         }
-    
-        const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-        movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
     
-    const movePieceToSquare = (piece, toRow, toCol) => {
+    const movePieceToSquare = (piece, toRow, toCol, promotion) => {
         const fromSquare = piece.parentElement;
         const toSquare = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
     
@@ -311,6 +379,11 @@ document.addEventListener("DOMContentLoaded", () => {
     
         // Move piece to new square
         toSquare.appendChild(piece);
+        if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
+            const newType = promotion ? promotion : 'q';
+            piece.src = `images/${promMap[newType]}-${piece.dataset.color}.svg`;
+            piece.dataset.type = promMap[newType];
+        }
     
         // Post-move operations
         checkForCheck();
@@ -318,6 +391,73 @@ document.addEventListener("DOMContentLoaded", () => {
             displayCheckmatePopup();
         } else {
             switchTurn(); // Change turn to white
+        }
+        evaluateBoard();
+    };
+
+    const generateFEN = () => {
+        const rows = [];
+        for (let r = 0; r < 8; r++) {
+            let rowStr = '';
+            let empty = 0;
+            for (let c = 0; c < 8; c++) {
+                const sqPiece = document.querySelector(`[data-row='${r}'][data-col='${c}'] .piece`);
+                if (sqPiece) {
+                    if (empty > 0) {
+                        rowStr += empty;
+                        empty = 0;
+                    }
+                    const map = { pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k' };
+                    let sym = map[sqPiece.dataset.type];
+                    rowStr += sqPiece.dataset.color === 'w' ? sym.toUpperCase() : sym;
+                } else {
+                    empty++;
+                }
+            }
+            if (empty > 0) rowStr += empty;
+            rows.push(rowStr);
+        }
+        return rows.join('/') + ' ' + turn + ' ' + getCastlingRights() + ' ' + getEnPassantSquare() + ' 0 ' + fullmoveNumber;
+    };
+
+    const getCastlingRights = () => {
+        let rights = '';
+        const wk = document.querySelector('[data-type="king"][data-color="w"]');
+        const bk = document.querySelector('[data-type="king"][data-color="b"]');
+        if (wk && wk.dataset.moved === 'false') {
+            const wrh = document.querySelector('[data-row="7"][data-col="7"] .piece');
+            const wra = document.querySelector('[data-row="7"][data-col="0"] .piece');
+            if (wrh && wrh.dataset.type === 'rook' && wrh.dataset.moved === 'false') rights += 'K';
+            if (wra && wra.dataset.type === 'rook' && wra.dataset.moved === 'false') rights += 'Q';
+        }
+        if (bk && bk.dataset.moved === 'false') {
+            const brh = document.querySelector('[data-row="0"][data-col="7"] .piece');
+            const bra = document.querySelector('[data-row="0"][data-col="0"] .piece');
+            if (brh && brh.dataset.type === 'rook' && brh.dataset.moved === 'false') rights += 'k';
+            if (bra && bra.dataset.type === 'rook' && bra.dataset.moved === 'false') rights += 'q';
+        }
+        return rights || '-';
+    };
+
+    const getEnPassantSquare = () => {
+        if (lastMove && lastMove.piece.dataset.type === 'pawn' && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
+            const row = (lastMove.fromRow + lastMove.toRow) / 2;
+            const col = lastMove.fromCol;
+            return 'abcdefgh'[col] + (8 - row);
+        }
+        return '-';
+    };
+
+    const evaluateBoard = () => {
+        requestStockfish();
+    };
+
+    const updateEvalBar = (cpScore) => {
+        const capped = Math.max(Math.min(cpScore, 1000), -1000);
+        const percent = 50 + capped / 20;
+        const fill = document.getElementById('evalFill');
+        if (fill) {
+            fill.style.height = Math.max(0, Math.min(100, percent)) + '%';
         }
     };
 
@@ -549,8 +689,13 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
     };
     const switchTurn = () => {
-        turn = turn === 'w' ? 'b' : 'w';
-    
+        if (turn === 'w') {
+            turn = 'b';
+        } else {
+            turn = 'w';
+            fullmoveNumber++;
+        }
+
         // If in one-player mode and it's Black's turn, make the bot move
         if (gameMode === "onePlayer" && turn === "b") {
             setTimeout(botMove, 500); // Give a delay so it’s visually clear
@@ -586,8 +731,11 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             switchTurn();
         }
+        evaluateBoard();
     };
     createBoard();
+    initStockfish();
+    evaluateBoard();
     toggleBotSelection();
 });
 
