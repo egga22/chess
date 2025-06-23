@@ -338,8 +338,25 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const isSquareAttacked = (boardCopy, row, col, color) => {
         const opponentColor = color === 'w' ? 'b' : 'w';
+
+        // Check for knight attacks first
+        const knightOffsets = [
+            [2, 1], [2, -1], [-2, 1], [-2, -1],
+            [1, 2], [1, -2], [-1, 2], [-1, -2]
+        ];
+        for (const [dr, dc] of knightOffsets) {
+            const r = row + dr;
+            const c = col + dc;
+            if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+                const piece = boardCopy[r][c];
+                if (piece && piece.color === opponentColor && piece.type === 'knight') {
+                    return true;
+                }
+            }
+        }
+
         const directions = [
-            [1, 0], [-1, 0], [0, 1], [0, -1], 
+            [1, 0], [-1, 0], [0, 1], [0, -1],
             [1, 1], [-1, -1], [1, -1], [-1, 1]
         ];
         for (const [rowDir, colDir] of directions) {
