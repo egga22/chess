@@ -324,7 +324,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (gameMode !== "onePlayer" || turn !== "b") {
             return;
         }
-
+        const pieces = Array.from(document.querySelectorAll('.piece'))
+            .filter(p => p.dataset.color === 'b');
+    
+        let allMoves = [];
+    
+        pieces.forEach(piece => {
+            const row = parseInt(piece.parentElement.dataset.row);
+            const col = parseInt(piece.parentElement.dataset.col);
+            const legalMoves = getLegalMoves(piece, row, col);
+    
+            legalMoves.forEach(move => {
+                allMoves.push({ piece, toRow: move[0], toCol: move[1] });
         if (botDifficulty === 'stockfish') {
             requestStockfish(best => {
                 if (!best) return;
@@ -365,6 +376,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
             movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
         }
+    
+        const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+        movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
     
     const movePieceToSquare = (piece, toRow, toCol, promotion) => {
@@ -689,13 +703,13 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('.move-dot').forEach(dot => dot.remove());
     };
     const switchTurn = () => {
+        turn = turn === 'w' ? 'b' : 'w';
         if (turn === 'w') {
             turn = 'b';
         } else {
             turn = 'w';
             fullmoveNumber++;
         }
-
         // If in one-player mode and it's Black's turn, make the bot move
         if (gameMode === "onePlayer" && turn === "b") {
             setTimeout(botMove, 500); // Give a delay so it’s visually clear
