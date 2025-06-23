@@ -376,9 +376,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
             movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
         }
-    
-        const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-        movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
     
     const movePieceToSquare = (piece, toRow, toCol, promotion) => {
