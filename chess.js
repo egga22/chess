@@ -393,15 +393,21 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // Handle en passant capture before moving if target square is empty
-        const initialTargetPiece = toSquare.querySelector('.piece');
-        if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs(fromCol - toCol) === 1 && !initialTargetPiece) {
-            const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
-            if (enemyPawn && enemyPawn.dataset.type === 'pawn' && enemyPawn.dataset.color !== piece.dataset.color) {
-                enemyPawn.remove();
-            }
-        }
-
+// Handle en passant capture before moving if target square is empty
+const initialTargetPiece = toSquare.querySelector('.piece');
+if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs(fromCol - toCol) === 1 && !initialTargetPiece) {
+    const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
+    if (
+        enemyPawn &&
+        enemyPawn.dataset.type === 'pawn' &&
+        enemyPawn.dataset.color !== piece.dataset.color &&
+        lastMove &&
+        lastMove.piece === enemyPawn &&
+        Math.abs(lastMove.fromRow - lastMove.toRow) === 2
+    ) {
+        enemyPawn.remove();
+    }
+}
         // Remove captured piece if present after potential en passant removal
         const targetPiece = toSquare.querySelector('.piece');
         if (targetPiece) {
