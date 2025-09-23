@@ -2592,7 +2592,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof SharedArrayBuffer === 'undefined' || typeof Atomics === 'undefined') {
             return {
                 available: false,
-                message: 'Stockfish requires SharedArrayBuffer support. Serve this page with Cross-Origin isolation headers (COOP and COEP) or use a compatible browser.'
+                message: 'Stockfish requires SharedArrayBuffer support. The app will try to enable Cross-Origin isolation automatically; if it does not reload, serve the page with COOP/COEP headers or use a compatible browser.'
             };
         }
 
