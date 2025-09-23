@@ -5,29 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chess Game</title>
     <link rel="stylesheet" href="styles.css">
-    <script>
-        window.coi = window.coi || {};
-        window.coi.shouldRegister = () => window.crossOriginIsolated !== true;
-    </script>
-    <script src="coi-serviceworker.js"></script>
 </head>
 <body>
     <div class="settings-container">
-        <div class="settings-group">
-            <label for="gameModeSelect">Game Mode:</label>
-            <select id="gameModeSelect" onchange="toggleBotSelection()">
-                <option value="twoPlayer">Two Players</option>
-                <option value="onePlayer">One Player (vs. Bot)</option>
-            </select>
-        </div>
-        <div class="settings-group">
-            <label for="gameTypeSelect">Game Type:</label>
-            <select id="gameTypeSelect">
-                <option value="standard">Standard</option>
-                <option value="chess960">Chess960</option>
-                <option value="custom">Custom Setup</option>
-            </select>
-        </div>
+        <label for="gameModeSelect">Game Mode:</label>
+        <select id="gameModeSelect" onchange="toggleBotSelection()">
+            <option value="twoPlayer">Two Players</option>
+            <option value="onePlayer">One Player (vs. Bot)</option>
+        </select>
     </div>
 
     <div id="botSelection" style="display: none;">
@@ -38,65 +23,11 @@
             <option value="stockfish">Stockfish</option>
             <option value="custom">Custom mix</option>
         </select>
-        <div id="stockfishStatus" class="stockfish-status" role="status" aria-live="polite"></div>
         <div id="customMixContainer" class="custom-mix-container" style="display: none;">
             <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
             <div id="customMixOptions" class="custom-mix-options"></div>
             <div id="customMixSummary" class="custom-mix-summary">Total: 0%</div>
             <div id="customMixError" class="custom-mix-error"></div>
-        </div>
-    </div>
-    <div id="customSetupContainer" class="custom-setup" style="display: none;">
-        <div class="custom-setup-description">Use the editor to arrange the board or load a FEN, then start your custom game.</div>
-        <div class="custom-setup-layout">
-            <div class="custom-editor-panel">
-                <div class="custom-editor-section">
-                    <div class="custom-section-title">Piece Palette</div>
-                    <div id="customPiecePalette" class="custom-piece-palette"></div>
-                    <div class="custom-editor-buttons">
-                        <button type="button" id="clearCustomBoard">Clear Board</button>
-                        <button type="button" id="resetCustomBoard">Use Standard Setup</button>
-                    </div>
-                </div>
-                <div class="custom-editor-section">
-                    <div class="custom-section-title">Position Settings</div>
-                    <div class="custom-setting-row">
-                        <label for="customSideToMove">Side to move:</label>
-                        <select id="customSideToMove">
-                            <option value="w">White</option>
-                            <option value="b">Black</option>
-                        </select>
-                    </div>
-                    <div class="custom-setting-row custom-castling">
-                        <span>Castling rights:</span>
-                        <label><input type="checkbox" id="customCastleWhiteKing"> White O-O</label>
-                        <label><input type="checkbox" id="customCastleWhiteQueen"> White O-O-O</label>
-                        <label><input type="checkbox" id="customCastleBlackKing"> Black O-O</label>
-                        <label><input type="checkbox" id="customCastleBlackQueen"> Black O-O-O</label>
-                    </div>
-                    <div class="custom-setting-row">
-                        <label for="customEnPassant">En passant target:</label>
-                        <select id="customEnPassant"></select>
-                    </div>
-                    <div class="custom-setting-row">
-                        <label for="customFullmove">Fullmove number:</label>
-                        <input type="number" id="customFullmove" min="1" value="1">
-                    </div>
-                </div>
-                <div class="custom-editor-actions">
-                    <button type="button" id="enterCustomEditor">Edit Position</button>
-                    <button type="button" id="applyCustomSetup">Start Custom Game</button>
-                    <div id="customSetupError" class="custom-setup-error"></div>
-                </div>
-            </div>
-            <div class="custom-fen-panel">
-                <div class="custom-section-title">Load from FEN</div>
-                <textarea id="customFenInput" class="custom-fen-input" placeholder="Paste a FEN string here"></textarea>
-                <div class="custom-fen-buttons">
-                    <button type="button" id="loadFenButton">Load Position</button>
-                </div>
-                <div id="customFenStatus" class="custom-fen-status"></div>
-            </div>
         </div>
     </div>
     <div id="boardArea">
@@ -109,6 +40,7 @@
             <div id="moveHistoryList"></div>
         </div>
     </div>
+    <script src="stockfish.js"></script>
     <script src="chess.js"></script>
 </body>
 </html>
