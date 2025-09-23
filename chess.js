@@ -13,6 +13,13 @@ document.addEventListener("DOMContentLoaded", () => {
     let engine;
     let gameOver = false;
     const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
+    const moveHistoryList = document.getElementById('moveHistoryList');
+    let moveHistoryEntries = [];
+    let historyStates = [];
+    let currentHistoryIndex = 0;
+    let pendingPromotion = null;
+    const fileLetters = 'abcdefgh';
+    const pieceNotationMap = { pawn: '', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
@@ -30,6 +37,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Define resetGame function if not already defined
     const resetGame = () => {
+        const promotionUI = document.querySelector('.promotion-ui');
+        if (promotionUI) {
+            promotionUI.remove();
+        }
+        pendingPromotion = null;
         chessboard.innerHTML = '';
         createBoard();
         selectedPiece = null;
@@ -37,14 +49,19 @@ document.addEventListener("DOMContentLoaded", () => {
         lastMove = null;
         fullmoveNumber = 1;
         gameOver = false;
+        moveHistoryEntries = [];
+        historyStates = [];
+        currentHistoryIndex = 0;
         document.querySelectorAll('.check').forEach(square => square.classList.remove('check'));
         const popup = document.querySelector('.checkmate-popup');
         if (popup) {
             popup.remove();
         }
+        historyStates.push(captureDetailedState());
+        updateMoveHistoryUI();
         evaluateBoard();
     };
-    function createBoard() {
+    function createBoard(boardState = null) {
         const chessboard = document.getElementById('chessboard');
         chessboard.innerHTML = ''; // Clear existing board
         chessboard.style.display = "grid";
@@ -65,7 +82,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ["rook-w", "knight-w", "bishop-w", "queen-w", "king-w", "bishop-w", "knight-w", "rook-w"]
         ];
 
-        const files = 'abcdefgh';
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
@@ -77,29 +93,39 @@ document.addEventListener("DOMContentLoaded", () => {
                 square.style.position = "relative";
                 square.style.backgroundColor = (row + col) % 2 === 0 ? "#f0d9b5" : "#b58863";
 
-                // 🔹 **Add row and column data for movement logic**
                 square.dataset.row = row;
                 square.dataset.col = col;
 
-                if (initialBoard[row][col]) {
+                let pieceData = null;
+                if (boardState && boardState[row] && boardState[row][col]) {
+                    pieceData = boardState[row][col];
+                } else if (!boardState && initialBoard[row][col]) {
+                    const [type, color] = initialBoard[row][col].split('-');
+                    pieceData = {
+                        type,
+                        color,
+                        moved: false,
+                        id: `piece${row}${col}`
+                    };
+                }
+
+                if (pieceData) {
                     const piece = document.createElement('img');
-                    piece.src = `images/${initialBoard[row][col]}.svg`;
+                    piece.src = `images/${pieceData.type}-${pieceData.color}.svg`;
                     piece.style.width = "70px";
                     piece.style.height = "70px";
-
-                    // 🔹 **Add class and data attributes for movement logic**
-                    piece.classList.add("piece");
-                    piece.dataset.color = initialBoard[row][col].includes("-w") ? "w" : "b";
-                    piece.dataset.type = initialBoard[row][col].split("-")[0];
-                    piece.dataset.moved = "false";
-                    piece.id = `piece${row}${col}`;
-
+                    piece.classList.add('piece');
+                    piece.dataset.color = pieceData.color;
+                    piece.dataset.type = pieceData.type;
+                    piece.dataset.moved = pieceData.moved ? 'true' : 'false';
+                    piece.id = pieceData.id || `piece${row}${col}`;
                     square.appendChild(piece);
                 }
+
                 if (row === 7) {
                     const fileLabel = document.createElement('span');
                     fileLabel.className = 'file-label';
-                    fileLabel.textContent = files[col];
+                    fileLabel.textContent = fileLetters[col];
                     square.appendChild(fileLabel);
                 }
                 if (col === 0) {
@@ -115,7 +141,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     const handleSquareClick = (event) => {
-        if (gameOver) return;
+        if (gameOver || pendingPromotion) return;
+
+        if (historyStates.length && currentHistoryIndex !== historyStates.length - 1) {
+            navigateToMove(historyStates.length - 1);
+            return;
+        }
 
         const square = event.currentTarget;
         const piece = square.querySelector(".piece");
@@ -159,44 +190,95 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const movePiece = (square) => {
         const piece = selectedPiece;
-        const targetPiece = square.querySelector('.piece');
         const fromRow = parseInt(piece.parentElement.dataset.row);
         const fromCol = parseInt(piece.parentElement.dataset.col);
         const toRow = parseInt(square.dataset.row);
         const toCol = parseInt(square.dataset.col);
-        if (targetPiece) {
-            targetPiece.remove();
-        }
-        // Handle castling
-        if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) {
-            const rookCol = toCol === 6 ? 7 : 0; // Rook's initial position
-            const rookTargetCol = toCol === 6 ? 5 : 3; // Rook's new position after castling
-            const rook = document.querySelector(`#piece${fromRow}${rookCol}`);
-            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
-            rookTargetSquare.appendChild(rook);
-            rook.dataset.moved = "true";
-        }
-        // Handle en passant
-        if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs(fromCol - toCol) === 1 && !targetPiece) {
+        const pieceType = piece.dataset.type;
+        const color = piece.dataset.color;
+        const disambiguation = getMoveDisambiguation(piece, fromRow, fromCol, toRow, toCol);
+
+        let isCapture = false;
+        let capturedPieceType = null;
+        let capturedPieceColor = null;
+        let isEnPassant = false;
+        let isCastling = null;
+
+        let targetPiece = square.querySelector('.piece');
+
+        if (
+            pieceType === 'pawn' &&
+            Math.abs(fromRow - toRow) === 1 &&
+            Math.abs(fromCol - toCol) === 1 &&
+            !targetPiece
+        ) {
             const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
-            if (enemyPawn && enemyPawn.dataset.type === 'pawn' && enemyPawn.dataset.color !== piece.dataset.color && lastMove && lastMove.piece === enemyPawn && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
+            if (
+                enemyPawn &&
+                enemyPawn.dataset.type === 'pawn' &&
+                enemyPawn.dataset.color !== color &&
+                lastMove &&
+                lastMove.pieceType === 'pawn' &&
+                Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
+                lastMove.toRow === fromRow &&
+                lastMove.toCol === toCol
+            ) {
+                capturedPieceType = enemyPawn.dataset.type;
+                capturedPieceColor = enemyPawn.dataset.color;
+                isCapture = true;
+                isEnPassant = true;
                 enemyPawn.remove();
             }
         }
-        square.appendChild(piece);
-        piece.dataset.moved = "true";
-        lastMove = { piece, fromRow, fromCol, toRow, toCol };
-        if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
-            promotePawn(piece);
-        } else {
-            checkForCheck();
-            if (isCheckmate()) {
-                displayCheckmatePopup();
-            } else {
-                switchTurn();
-            }
+
+        targetPiece = square.querySelector('.piece');
+        if (targetPiece) {
+            capturedPieceType = targetPiece.dataset.type;
+            capturedPieceColor = targetPiece.dataset.color;
+            isCapture = true;
+            targetPiece.remove();
         }
-        evaluateBoard();
+
+        square.appendChild(piece);
+
+        if (pieceType === 'king' && Math.abs(fromCol - toCol) === 2) {
+            const rookCol = toCol === 6 ? 7 : 0;
+            const rookTargetCol = toCol === 6 ? 5 : 3;
+            const rook = document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`);
+            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
+            if (rook && rookTargetSquare) {
+                rookTargetSquare.appendChild(rook);
+                rook.dataset.moved = 'true';
+            }
+            isCastling = toCol === 6 ? 'king' : 'queen';
+        }
+
+        piece.dataset.moved = 'true';
+
+        const moveDetails = {
+            color,
+            pieceType,
+            fromRow,
+            fromCol,
+            toRow,
+            toCol,
+            isCapture,
+            capturedPieceType,
+            capturedPieceColor,
+            isEnPassant,
+            isCastling,
+            promotionType: null,
+            disambiguation,
+            pieceId: piece.id
+        };
+
+        if (pieceType === 'pawn' && (toRow === 0 || toRow === 7)) {
+            pendingPromotion = { piece, moveDetails };
+            promotePawn(piece);
+            return;
+        }
+
+        finalizeMove(moveDetails);
     };
     const showLegalMoves = (piece, square) => {
         removeMoveDots();
@@ -237,7 +319,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     moves.push([row + direction, col + 1]);
                 }
                 // En passant
-                if (lastMove && lastMove.piece.dataset.type === 'pawn' && Math.abs(lastMove.fromRow - lastMove.toRow) === 2) {
+                if (
+                    lastMove &&
+                    lastMove.pieceType === 'pawn' &&
+                    lastMove.color !== color &&
+                    Math.abs(lastMove.fromRow - lastMove.toRow) === 2
+                ) {
                     if (lastMove.toRow === row && lastMove.toCol === col - 1) {
                         moves.push([row + direction, col - 1]);
                     }
@@ -338,6 +425,10 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        if (historyStates.length && currentHistoryIndex !== historyStates.length - 1) {
+            navigateToMove(historyStates.length - 1);
+        }
+
         if (botDifficulty === 'stockfish') {
             requestStockfish(best => {
                 if (!best) return;
@@ -346,9 +437,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const toFile = best[2];
                 const toRank = best[3];
                 const fromRow = 8 - parseInt(fromRank);
-                const fromCol = 'abcdefgh'.indexOf(fromFile);
+                const fromCol = fileLetters.indexOf(fromFile);
                 const toRow = 8 - parseInt(toRank);
-                const toCol = 'abcdefgh'.indexOf(toFile);
+                const toCol = fileLetters.indexOf(toFile);
                 const piece = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"] .piece`);
                 if (piece) {
                     movePieceToSquare(piece, toRow, toCol, best[4]);
@@ -381,11 +472,15 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const movePieceToSquare = (piece, toRow, toCol, promotion) => {
-        if (gameOver) {
+        if (gameOver || pendingPromotion) {
             return;
         }
 
         const fromSquare = piece.parentElement;
+        if (!fromSquare) {
+            return;
+        }
+
         const fromRow = parseInt(fromSquare.dataset.row);
         const fromCol = parseInt(fromSquare.dataset.col);
         const toSquare = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
@@ -393,62 +488,352 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-// Handle en passant capture before moving if target square is empty
-const initialTargetPiece = toSquare.querySelector('.piece');
-if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs(fromCol - toCol) === 1 && !initialTargetPiece) {
-    const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
-    if (
-        enemyPawn &&
-        enemyPawn.dataset.type === 'pawn' &&
-        enemyPawn.dataset.color !== piece.dataset.color &&
-        lastMove &&
-        lastMove.piece === enemyPawn &&
-        Math.abs(lastMove.fromRow - lastMove.toRow) === 2
-    ) {
-        enemyPawn.remove();
-    }
-}
-        // Remove captured piece if present after potential en passant removal
-        const targetPiece = toSquare.querySelector('.piece');
+        const pieceType = piece.dataset.type;
+        const color = piece.dataset.color;
+        const disambiguation = getMoveDisambiguation(piece, fromRow, fromCol, toRow, toCol);
+
+        let isCapture = false;
+        let capturedPieceType = null;
+        let capturedPieceColor = null;
+        let isEnPassant = false;
+        let isCastling = null;
+
+        if (
+            pieceType === 'pawn' &&
+            Math.abs(fromRow - toRow) === 1 &&
+            Math.abs(fromCol - toCol) === 1 &&
+            !toSquare.querySelector('.piece')
+        ) {
+            const enemyPawn = document.querySelector(`[data-row="${fromRow}"][data-col="${toCol}"] .piece`);
+            if (
+                enemyPawn &&
+                enemyPawn.dataset.type === 'pawn' &&
+                enemyPawn.dataset.color !== color &&
+                lastMove &&
+                lastMove.pieceType === 'pawn' &&
+                Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
+                lastMove.toRow === fromRow &&
+                lastMove.toCol === toCol
+            ) {
+                capturedPieceType = enemyPawn.dataset.type;
+                capturedPieceColor = enemyPawn.dataset.color;
+                isCapture = true;
+                isEnPassant = true;
+                enemyPawn.remove();
+            }
+        }
+
+        let targetPiece = toSquare.querySelector('.piece');
         if (targetPiece) {
+            capturedPieceType = targetPiece.dataset.type;
+            capturedPieceColor = targetPiece.dataset.color;
+            isCapture = true;
             targetPiece.remove();
         }
 
-        // Move the piece to the new square
         toSquare.appendChild(piece);
-        piece.dataset.moved = "true";
 
-        // Handle castling
-        if (piece.dataset.type === 'king' && Math.abs(fromCol - toCol) === 2) {
+        if (pieceType === 'king' && Math.abs(fromCol - toCol) === 2) {
             const rookCol = toCol === 6 ? 7 : 0;
             const rookTargetCol = toCol === 6 ? 5 : 3;
             const rook = document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`);
             const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
             if (rook && rookTargetSquare) {
                 rookTargetSquare.appendChild(rook);
-                rook.dataset.moved = "true";
+                rook.dataset.moved = 'true';
             }
+            isCastling = toCol === 6 ? 'king' : 'queen';
         }
 
-        // Handle promotion for bot moves
-        if (piece.dataset.type === 'pawn' && (toRow === 0 || toRow === 7)) {
-            const newTypeKey = promotion ? promotion : 'q';
-            const mappedType = promMap[newTypeKey] || newTypeKey;
-            piece.src = `images/${mappedType}-${piece.dataset.color}.svg`;
+        piece.dataset.moved = 'true';
+
+        let promotionType = null;
+        if (pieceType === 'pawn' && (toRow === 0 || toRow === 7)) {
+            const newTypeKey = promotion ? promotion.toLowerCase() : 'q';
+            const mappedType = promMap[newTypeKey] || 'queen';
+            promotionType = mappedType;
+            piece.src = `images/${mappedType}-${color}.svg`;
             piece.dataset.type = mappedType;
         }
 
-        lastMove = { piece, fromRow, fromCol, toRow, toCol };
+        const moveDetails = {
+            color,
+            pieceType,
+            fromRow,
+            fromCol,
+            toRow,
+            toCol,
+            isCapture,
+            capturedPieceType,
+            capturedPieceColor,
+            isEnPassant,
+            isCastling,
+            promotionType,
+            disambiguation,
+            pieceId: piece.id
+        };
 
-        // Post-move operations
+        finalizeMove(moveDetails);
+    };
+
+    const getFileLetter = (col) => fileLetters[col];
+
+    const getSquareNotation = (row, col) => `${fileLetters[col]}${8 - row}`;
+
+    const getMoveDisambiguation = (piece, fromRow, fromCol, toRow, toCol) => {
+        if (piece.dataset.type === 'pawn') {
+            return '';
+        }
+        const type = piece.dataset.type;
+        const color = piece.dataset.color;
+        const otherPieces = Array.from(document.querySelectorAll(`.piece[data-type='${type}'][data-color='${color}']`))
+            .filter(p => p !== piece);
+        if (!otherPieces.length) {
+            return '';
+        }
+        const candidates = otherPieces.filter(other => {
+            const row = parseInt(other.parentElement.dataset.row);
+            const col = parseInt(other.parentElement.dataset.col);
+            const legalMoves = getLegalMoves(other, row, col);
+            return legalMoves.some(([r, c]) => r === toRow && c === toCol);
+        });
+        if (!candidates.length) {
+            return '';
+        }
+        const fromFile = getFileLetter(fromCol);
+        const fromRank = 8 - fromRow;
+        const sharesFile = candidates.some(other => parseInt(other.parentElement.dataset.col) === fromCol);
+        const sharesRank = candidates.some(other => parseInt(other.parentElement.dataset.row) === fromRow);
+        if (!sharesFile) {
+            return fromFile;
+        }
+        if (!sharesRank) {
+            return fromRank.toString();
+        }
+        return `${fromFile}${fromRank}`;
+    };
+
+    const formatMoveNotation = (moveDetails, { isCheck, isMate }) => {
+        if (moveDetails.isCastling) {
+            let notation = moveDetails.isCastling === 'king' ? 'O-O' : 'O-O-O';
+            if (isMate) {
+                notation += '#';
+            } else if (isCheck) {
+                notation += '+';
+            }
+            return notation;
+        }
+
+        let notation = '';
+        if (moveDetails.pieceType === 'pawn') {
+            if (moveDetails.isCapture) {
+                notation += `${getFileLetter(moveDetails.fromCol)}x`;
+            }
+            notation += getSquareNotation(moveDetails.toRow, moveDetails.toCol);
+        } else {
+            notation += pieceNotationMap[moveDetails.pieceType] + (moveDetails.disambiguation || '');
+            if (moveDetails.isCapture) {
+                notation += 'x';
+            }
+            notation += getSquareNotation(moveDetails.toRow, moveDetails.toCol);
+        }
+
+        if (moveDetails.promotionType) {
+            notation += `=${pieceNotationMap[moveDetails.promotionType]}`;
+        }
+
+        if (isMate) {
+            notation += '#';
+        } else if (isCheck) {
+            notation += '+';
+        }
+
+        return notation;
+    };
+
+    const captureDetailedState = () => {
+        const boardState = [];
+        for (let row = 0; row < 8; row++) {
+            boardState[row] = [];
+            for (let col = 0; col < 8; col++) {
+                const piece = document.querySelector(`[data-row='${row}'][data-col='${col}'] .piece`);
+                if (piece) {
+                    boardState[row][col] = {
+                        type: piece.dataset.type,
+                        color: piece.dataset.color,
+                        moved: piece.dataset.moved === 'true',
+                        id: piece.id
+                    };
+                } else {
+                    boardState[row][col] = null;
+                }
+            }
+        }
+        return {
+            board: boardState,
+            turn,
+            fullmoveNumber,
+            lastMove: lastMove ? { ...lastMove } : null,
+            gameOver
+        };
+    };
+
+    const renderState = (state) => {
+        createBoard(state.board);
+        turn = state.turn;
+        fullmoveNumber = state.fullmoveNumber;
+        lastMove = state.lastMove ? { ...state.lastMove } : null;
+        gameOver = state.gameOver;
+        pendingPromotion = null;
+        selectedPiece = null;
         checkForCheck();
-        if (isCheckmate()) {
+        evaluateBoard();
+    };
+
+    const navigateToMove = (index) => {
+        if (pendingPromotion || !historyStates.length) {
+            return;
+        }
+        const clamped = Math.max(0, Math.min(index, historyStates.length - 1));
+        if (clamped === currentHistoryIndex) {
+            return;
+        }
+        currentHistoryIndex = clamped;
+        const state = historyStates[clamped];
+        renderState(state);
+        updateMoveHistoryUI();
+        const popup = document.querySelector('.checkmate-popup');
+        if (popup) {
+            popup.style.display = currentHistoryIndex === historyStates.length - 1 ? 'flex' : 'none';
+        }
+    };
+
+    const updateMoveHistoryUI = () => {
+        if (!moveHistoryList) {
+            return;
+        }
+        moveHistoryList.innerHTML = '';
+
+        const startEntry = document.createElement('div');
+        startEntry.className = 'history-start';
+        startEntry.textContent = 'Start Position';
+        if (currentHistoryIndex === 0) {
+            startEntry.classList.add('active');
+        }
+        startEntry.addEventListener('click', () => navigateToMove(0));
+        moveHistoryList.appendChild(startEntry);
+
+        const rows = [];
+        moveHistoryEntries.forEach(entry => {
+            let row = rows[rows.length - 1];
+            if (!row || row.number !== entry.moveNumber) {
+                row = { number: entry.moveNumber, white: null, black: null };
+                rows.push(row);
+            }
+            if (entry.color === 'w') {
+                row.white = entry;
+            } else {
+                row.black = entry;
+            }
+        });
+
+        const createMoveElement = (entry, colorClass) => {
+            const span = document.createElement('div');
+            span.className = `move ${colorClass}`;
+            if (!entry) {
+                span.classList.add('empty');
+                span.textContent = '—';
+                return span;
+            }
+            span.textContent = entry.notation;
+            if (entry.stateIndex === currentHistoryIndex) {
+                span.classList.add('active');
+            }
+            span.addEventListener('click', () => navigateToMove(entry.stateIndex));
+            return span;
+        };
+
+        rows.forEach(row => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'move-row';
+
+            const numberEl = document.createElement('div');
+            numberEl.className = 'move-number';
+            numberEl.textContent = `${row.number}.`;
+            rowEl.appendChild(numberEl);
+
+            rowEl.appendChild(createMoveElement(row.white, 'white'));
+            rowEl.appendChild(createMoveElement(row.black, 'black'));
+
+            moveHistoryList.appendChild(rowEl);
+        });
+
+        if (currentHistoryIndex === historyStates.length - 1) {
+            moveHistoryList.scrollTop = moveHistoryList.scrollHeight;
+        }
+    };
+
+    const finalizeMove = (moveDetails) => {
+        pendingPromotion = null;
+        lastMove = {
+            color: moveDetails.color,
+            fromRow: moveDetails.fromRow,
+            fromCol: moveDetails.fromCol,
+            toRow: moveDetails.toRow,
+            toCol: moveDetails.toCol,
+            pieceType: moveDetails.pieceType,
+            resultingPieceType: moveDetails.promotionType || moveDetails.pieceType,
+            isCapture: moveDetails.isCapture,
+            capturedPieceType: moveDetails.capturedPieceType,
+            capturedPieceColor: moveDetails.capturedPieceColor,
+            isEnPassant: moveDetails.isEnPassant,
+            isCastling: moveDetails.isCastling,
+            promotionType: moveDetails.promotionType || null
+        };
+
+        const opponent = moveDetails.color === 'w' ? 'b' : 'w';
+        checkForCheck();
+        const boardCopy = createBoardCopy();
+        const isCheck = isKingInCheck(boardCopy, opponent);
+        const isMate = isCheck && !hasAnyLegalMoves(opponent);
+        const notation = formatMoveNotation(moveDetails, { isCheck, isMate });
+        const stateIndex = historyStates.length;
+
+        moveHistoryEntries.push({
+            notation,
+            color: moveDetails.color,
+            moveNumber: fullmoveNumber,
+            stateIndex
+        });
+
+        if (isMate) {
             displayCheckmatePopup();
         } else {
             switchTurn();
         }
+
+        historyStates.push(captureDetailedState());
+        currentHistoryIndex = stateIndex;
+        updateMoveHistoryUI();
         evaluateBoard();
     };
+
+    document.addEventListener('keydown', (event) => {
+        const tag = event.target.tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+            return;
+        }
+        if (pendingPromotion || !historyStates.length) {
+            return;
+        }
+        if (event.key === 'ArrowLeft') {
+            navigateToMove(currentHistoryIndex - 1);
+            event.preventDefault();
+        } else if (event.key === 'ArrowRight') {
+            navigateToMove(currentHistoryIndex + 1);
+            event.preventDefault();
+        }
+    });
 
     const generateFEN = () => {
         const rows = [];
@@ -495,9 +880,9 @@ if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs
     };
 
     const getEnPassantSquare = () => {
-        if (!lastMove || lastMove.piece.dataset.type !== 'pawn') return '-';
+        if (!lastMove || lastMove.pieceType !== 'pawn') return '-';
         if (Math.abs(lastMove.fromRow - lastMove.toRow) !== 2) return '-';
-        const file = 'abcdefgh'[lastMove.fromCol];
+        const file = fileLetters[lastMove.fromCol];
         const rank = (8 - Math.min(lastMove.fromRow, lastMove.toRow)).toString();
         return file + rank;
     };
@@ -800,18 +1185,21 @@ if (piece.dataset.type === 'pawn' && Math.abs(fromRow - toRow) === 1 && Math.abs
     };
     window.completePromotion = (color, type, id) => {
         const pawn = document.getElementById(id);
+        if (!pawn || !pendingPromotion) {
+            return;
+        }
         pawn.src = `images/${type}-${color}.svg`;
         pawn.dataset.type = type;
-        document.body.removeChild(document.querySelector('.promotion-ui'));
-        checkForCheck();
-        if (isCheckmate()) {
-            displayCheckmatePopup();
-        } else {
-            switchTurn();
+        const ui = document.querySelector('.promotion-ui');
+        if (ui) {
+            ui.remove();
         }
-        evaluateBoard();
+        pendingPromotion.moveDetails.promotionType = type;
+        finalizeMove(pendingPromotion.moveDetails);
     };
     createBoard();
+    historyStates.push(captureDetailedState());
+    updateMoveHistoryUI();
     initStockfish();
     evaluateBoard();
     toggleBotSelection();

@@ -23,8 +23,14 @@
         </select>
     </div>
     <div id="boardArea">
-        <div id="chessboard"></div>
-        <div id="evalBar"><div id="evalFill"></div></div>
+        <div id="boardWrapper">
+            <div id="chessboard"></div>
+            <div id="evalBar"><div id="evalFill"></div></div>
+        </div>
+        <div id="historyColumn">
+            <div class="history-header">Move History</div>
+            <div id="moveHistoryList"></div>
+        </div>
     </div>
     <script src="stockfish.js"></script>
     <script src="chess.js"></script>
