@@ -66,6 +66,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const pieceNotationMap = { pawn: '', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };
     const CASTLING_KING_TARGET_COLUMNS = { king: 6, queen: 2 };
     const CASTLING_ROOK_TARGET_COLUMNS = { king: 5, queen: 3 };
+    const whiteCapturedList = document.getElementById('whiteCapturedPieces');
+    const blackCapturedList = document.getElementById('blackCapturedPieces');
+    const whiteMaterialAdvantage = document.getElementById('whiteMaterialAdvantage');
+    const blackMaterialAdvantage = document.getElementById('blackMaterialAdvantage');
+    const capturedPieceOrder = ['queen', 'rook', 'bishop', 'knight', 'pawn'];
+    const capturedPieceValues = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 };
+
+    function createEmptyCapturedPiecesState() {
+        return { pawn: 0, knight: 0, bishop: 0, rook: 0, queen: 0 };
+    }
+
+    let capturedPiecesState = {
+        w: createEmptyCapturedPiecesState(),
+        b: createEmptyCapturedPiecesState()
+    };
 
     let gameType = gameTypeSelect ? gameTypeSelect.value : 'standard';
     let customSetup = null;
@@ -103,6 +118,92 @@ document.addEventListener("DOMContentLoaded", () => {
             board[row] = Array(8).fill(null);
         }
         return board;
+    }
+
+    function cloneCapturedPiecesState(state) {
+        if (!state) {
+            return {
+                w: createEmptyCapturedPiecesState(),
+                b: createEmptyCapturedPiecesState()
+            };
+        }
+        return {
+            w: { ...createEmptyCapturedPiecesState(), ...(state.w || {}) },
+            b: { ...createEmptyCapturedPiecesState(), ...(state.b || {}) }
+        };
+    }
+
+    function calculateCapturedMaterial(counts = {}) {
+        return capturedPieceOrder.reduce((total, type) => {
+            const amount = counts[type] || 0;
+            const value = capturedPieceValues[type] || 0;
+            return total + amount * value;
+        }, 0);
+    }
+
+    function updateMaterialAdvantageDisplay() {
+        if (!whiteMaterialAdvantage || !blackMaterialAdvantage) {
+            return;
+        }
+        const whiteScore = calculateCapturedMaterial(capturedPiecesState.w);
+        const blackScore = calculateCapturedMaterial(capturedPiecesState.b);
+        const diff = whiteScore - blackScore;
+        whiteMaterialAdvantage.textContent = '';
+        blackMaterialAdvantage.textContent = '';
+        if (diff > 0) {
+            whiteMaterialAdvantage.textContent = `+${diff}`;
+        } else if (diff < 0) {
+            blackMaterialAdvantage.textContent = `+${Math.abs(diff)}`;
+        }
+    }
+
+    function renderCapturedPiecesForColor(color) {
+        const listEl = color === 'w' ? whiteCapturedList : blackCapturedList;
+        if (!listEl) {
+            return;
+        }
+        listEl.innerHTML = '';
+        const counts = capturedPiecesState[color];
+        if (!counts) {
+            return;
+        }
+        const opponentColor = color === 'w' ? 'b' : 'w';
+        capturedPieceOrder.forEach(type => {
+            const count = counts[type] || 0;
+            for (let i = 0; i < count; i++) {
+                const img = document.createElement('img');
+                img.src = `images/${type}-${opponentColor}.svg`;
+                img.alt = `${opponentColor === 'w' ? 'White' : 'Black'} ${type}`;
+                img.className = 'captured-piece-icon';
+                listEl.appendChild(img);
+            }
+        });
+    }
+
+    function renderAllCapturedPieces() {
+        renderCapturedPiecesForColor('w');
+        renderCapturedPiecesForColor('b');
+        updateMaterialAdvantageDisplay();
+    }
+
+    function resetCapturedPiecesTracking() {
+        capturedPiecesState = {
+            w: createEmptyCapturedPiecesState(),
+            b: createEmptyCapturedPiecesState()
+        };
+        renderAllCapturedPieces();
+    }
+
+    function recordCapturedPiece(color, pieceType) {
+        if (!pieceType) {
+            return;
+        }
+        const counts = capturedPiecesState[color];
+        if (!counts || !(pieceType in counts)) {
+            return;
+        }
+        counts[pieceType] += 1;
+        renderAllCapturedPieces();
     }
 
     gameModeSelect.addEventListener("change", () => {
@@ -868,6 +969,7 @@ document.addEventListener("DOMContentLoaded", () => {
         moveHistoryEntries = [];
         historyStates = [];
         currentHistoryIndex = 0;
+        resetCapturedPiecesTracking();
         document.querySelectorAll('.check').forEach(square => square.classList.remove('check'));
         const popup = document.querySelector('.checkmate-popup');
         if (popup) {
@@ -2095,7 +2197,8 @@ document.addEventListener("DOMContentLoaded", () => {
             gameOver,
             castlingRightsState: JSON.parse(JSON.stringify(castlingRightsState)),
             castlingRookColumns: JSON.parse(JSON.stringify(castlingRookColumns)),
-            kingHomeRows: { ...kingHomeRows }
+            kingHomeRows: { ...kingHomeRows },
+            capturedPieces: cloneCapturedPiecesState(capturedPiecesState)
         };
     };
 
@@ -2114,6 +2217,8 @@ document.addEventListener("DOMContentLoaded", () => {
         gameOver = state.gameOver;
         pendingPromotion = null;
         selectedPiece = null;
+        capturedPiecesState = cloneCapturedPiecesState(state.capturedPieces);
+        renderAllCapturedPieces();
         checkForCheck();
         evaluateBoard();
     };
@@ -2203,6 +2308,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const finalizeMove = (moveDetails) => {
         pendingPromotion = null;
+        if (moveDetails.isCapture && moveDetails.capturedPieceType) {
+            recordCapturedPiece(moveDetails.color, moveDetails.capturedPieceType);
+        }
         lastMove = {
             color: moveDetails.color,
             fromRow: moveDetails.fromRow,
