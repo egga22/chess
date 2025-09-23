@@ -96,9 +96,25 @@
         </div>
     </div>
     <div id="boardArea">
-        <div id="boardWrapper">
-            <div id="chessboard"></div>
-            <div id="evalBar"><div id="evalFill"></div></div>
+        <div class="board-with-captures">
+            <div class="captured-pieces captured-white">
+                <span class="captured-label">White Captures</span>
+                <div class="captured-info">
+                    <div class="captured-list" id="whiteCapturedPieces"></div>
+                    <span class="captured-advantage" id="whiteMaterialAdvantage"></span>
+                </div>
+            </div>
+            <div id="boardWrapper">
+                <div id="chessboard"></div>
+                <div id="evalBar"><div id="evalFill"></div></div>
+            </div>
+            <div class="captured-pieces captured-black">
+                <span class="captured-label">Black Captures</span>
+                <div class="captured-info">
+                    <div class="captured-list" id="blackCapturedPieces"></div>
+                    <span class="captured-advantage" id="blackMaterialAdvantage"></span>
+                </div>
+            </div>
         </div>
         <div id="historyColumn">
             <div class="history-header">Move History</div>
