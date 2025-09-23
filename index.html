@@ -13,6 +13,7 @@
             <select id="gameModeSelect" onchange="toggleBotSelection()">
                 <option value="twoPlayer">Two Players</option>
                 <option value="onePlayer">One Player (vs. Bot)</option>
+                <option value="zeroPlayer">Zero Players (Bot vs. Bot)</option>
             </select>
         </div>
         <div class="settings-group">
@@ -26,19 +27,36 @@
         </div>
     </div>
 
-    <div id="botSelection" style="display: none;">
-        <label for="botDifficulty">Bot:</label>
-        <select id="botDifficulty">
-            <option value="random">Random Moves</option>
-            <option value="worst">Worst Moves</option>
-            <option value="stockfish">Stockfish</option>
-            <option value="custom">Custom mix</option>
-        </select>
-        <div id="customMixContainer" class="custom-mix-container" style="display: none;">
-            <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
-            <div id="customMixOptions" class="custom-mix-options"></div>
-            <div id="customMixSummary" class="custom-mix-summary">Total: 0%</div>
-            <div id="customMixError" class="custom-mix-error"></div>
+    <div id="botSelection" class="bot-selection" style="display: none;">
+        <div class="bot-selection-group" data-color="w">
+            <label for="whiteBotDifficulty">White Bot:</label>
+            <select id="whiteBotDifficulty" class="bot-difficulty">
+                <option value="random">Random Moves</option>
+                <option value="worst">Worst Moves</option>
+                <option value="stockfish">Stockfish</option>
+                <option value="custom">Custom mix</option>
+            </select>
+            <div class="custom-mix-container" data-color="w" style="display: none;">
+                <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
+                <div class="custom-mix-options" data-color="w"></div>
+                <div class="custom-mix-summary" data-color="w">Total: 0%</div>
+                <div class="custom-mix-error" data-color="w"></div>
+            </div>
+        </div>
+        <div class="bot-selection-group" data-color="b">
+            <label for="blackBotDifficulty">Black Bot:</label>
+            <select id="blackBotDifficulty" class="bot-difficulty">
+                <option value="random">Random Moves</option>
+                <option value="worst">Worst Moves</option>
+                <option value="stockfish">Stockfish</option>
+                <option value="custom">Custom mix</option>
+            </select>
+            <div class="custom-mix-container" data-color="b" style="display: none;">
+                <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
+                <div class="custom-mix-options" data-color="b"></div>
+                <div class="custom-mix-summary" data-color="b">Total: 0%</div>
+                <div class="custom-mix-error" data-color="b"></div>
+            </div>
         </div>
     </div>
     <div id="customSetupModal" class="custom-setup-modal hidden">

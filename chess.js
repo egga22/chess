@@ -2,11 +2,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const chessboard = document.getElementById('chessboard');
     const gameModeSelect = document.getElementById('gameModeSelect');
     const botSelection = document.getElementById('botSelection');
-    const botDifficultySelect = document.getElementById('botDifficulty');
-    const customMixContainer = document.getElementById('customMixContainer');
-    const customMixOptions = document.getElementById('customMixOptions');
-    const customMixSummary = document.getElementById('customMixSummary');
-    const customMixError = document.getElementById('customMixError');
+    const botSelectors = {
+        w: document.getElementById('whiteBotDifficulty'),
+        b: document.getElementById('blackBotDifficulty')
+    };
+    const botSelectionGroups = {
+        w: document.querySelector('.bot-selection-group[data-color="w"]'),
+        b: document.querySelector('.bot-selection-group[data-color="b"]')
+    };
     const gameTypeSelect = document.getElementById('gameTypeSelect');
     const editCustomSetupButton = document.getElementById('editCustomSetupButton');
     const customSetupModal = document.getElementById('customSetupModal');
@@ -40,22 +43,57 @@ document.addEventListener("DOMContentLoaded", () => {
         { id: 'stockfish', label: 'Stockfish' }
     ];
 
-    const customMixState = botOptions.reduce((acc, bot) => {
-        acc[bot.id] = { selected: false, weight: 0 };
-        return acc;
-    }, {});
-    const customMixControls = new Map();
-    let lastValidCustomMix = [];
-    let isUpdatingCustomMixInternally = false;
+    function createInitialCustomMixState() {
+        return botOptions.reduce((acc, bot) => {
+            acc[bot.id] = { selected: false, weight: 0 };
+            return acc;
+        }, {});
+    }
+
+    function getCustomMixElements(color) {
+        const container = document.querySelector(`.custom-mix-container[data-color="${color}"]`);
+        return {
+            container,
+            options: container ? container.querySelector('.custom-mix-options') : null,
+            summary: container ? container.querySelector('.custom-mix-summary') : null,
+            error: container ? container.querySelector('.custom-mix-error') : null
+        };
+    }
+
+    const customMixElements = {
+        w: getCustomMixElements('w'),
+        b: getCustomMixElements('b')
+    };
+
+    const customMixState = {
+        w: createInitialCustomMixState(),
+        b: createInitialCustomMixState()
+    };
+    const customMixControls = {
+        w: new Map(),
+        b: new Map()
+    };
+    const lastValidCustomMix = {
+        w: [],
+        b: []
+    };
+    const isUpdatingCustomMixInternally = {
+        w: false,
+        b: false
+    };
 
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
     let gameMode = 'twoPlayer'; // Default game mode
-    let botDifficulty = botDifficultySelect.value;
+    const botDifficulty = {
+        w: botSelectors.w ? botSelectors.w.value : 'random',
+        b: botSelectors.b ? botSelectors.b.value : 'random'
+    };
     let fullmoveNumber = 1;
     let engine;
     let gameOver = false;
+    let pendingBotMoveTimeout = null;
     const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
     const moveHistoryList = document.getElementById('moveHistoryList');
     let moveHistoryEntries = [];
@@ -208,11 +246,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
-        if (gameMode === "onePlayer") {
-            botSelection.style.display = "block"; // Show bot difficulty dropdown
-        } else {
-            botSelection.style.display = "none"; // Hide dropdown in two-player mode
-        }
+        cancelScheduledBotMove();
+        updateBotSelectionVisibility();
         updateCustomMixVisibility();
         resetGame(); // Reset the game when switching modes
     });
@@ -234,35 +269,49 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    botDifficultySelect.addEventListener('change', () => {
-        botDifficulty = botDifficultySelect.value;
-        updateCustomMixVisibility();
-        evaluateBoard();
+    Object.entries(botSelectors).forEach(([color, select]) => {
+        if (!select) {
+            return;
+        }
+        select.addEventListener('change', () => {
+            botDifficulty[color] = select.value;
+            updateCustomMixVisibility();
+            evaluateBoard();
+            if (turn === color && isColorBotControlled(color)) {
+                scheduleBotMoveIfNeeded({ force: true });
+            }
+        });
     });
 
-    function getSelectedCustomMixCount() {
+    function getSelectedCustomMixCount(color) {
+        const state = customMixState[color];
+        if (!state) {
+            return 0;
+        }
         return botOptions.reduce((count, bot) => {
-            const state = customMixState[bot.id];
-            return count + (state && state.selected ? 1 : 0);
+            const entry = state[bot.id];
+            return count + (entry && entry.selected ? 1 : 0);
         }, 0);
     }
 
-    function updateCustomMixError(message) {
-        if (!customMixError) {
+    function updateCustomMixError(color, message) {
+        const elements = customMixElements[color];
+        if (!elements || !elements.error) {
             return;
         }
-        customMixError.textContent = message;
+        elements.error.textContent = message;
     }
 
-    function updateCustomMixSummaryDisplay(total) {
-        if (!customMixSummary) {
+    function updateCustomMixSummaryDisplay(color, total) {
+        const elements = customMixElements[color];
+        if (!elements || !elements.summary) {
             return;
         }
         const roundedTotal = Number.isFinite(total) ? total : 0;
-        customMixSummary.textContent = `Total: ${roundedTotal}%`;
+        elements.summary.textContent = `Total: ${roundedTotal}%`;
     }
 
-    function getCustomMixSummary() {
+    function getCustomMixSummary(color) {
         const summary = {
             entries: [],
             totalWeight: 0,
@@ -270,16 +319,21 @@ document.addEventListener("DOMContentLoaded", () => {
             valid: false
         };
 
+        const state = customMixState[color];
+        if (!state) {
+            return summary;
+        }
+
         botOptions.forEach(bot => {
-            const state = customMixState[bot.id];
-            if (!state) {
+            const entry = state[bot.id];
+            if (!entry) {
                 return;
             }
-            if (state.selected) {
+            if (entry.selected) {
                 summary.selectedCount += 1;
-                summary.totalWeight += state.weight;
-                if (state.weight > 0) {
-                    summary.entries.push({ id: bot.id, weight: state.weight });
+                summary.totalWeight += entry.weight;
+                if (entry.weight > 0) {
+                    summary.entries.push({ id: bot.id, weight: entry.weight });
                 }
             }
         });
@@ -288,9 +342,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return summary;
     }
 
-    function handleCustomMixChange() {
-        const summary = getCustomMixSummary();
-        updateCustomMixSummaryDisplay(summary.totalWeight);
+    function handleCustomMixChange(color) {
+        const summary = getCustomMixSummary(color);
+        updateCustomMixSummaryDisplay(color, summary.totalWeight);
 
         let message = '';
         if (summary.selectedCount < 2) {
@@ -300,16 +354,21 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (summary.entries.length === 0) {
             message = 'Assign a positive percentage to at least one bot.';
         } else {
-            lastValidCustomMix = summary.entries.map(entry => ({ ...entry }));
+            lastValidCustomMix[color] = summary.entries.map(entry => ({ ...entry }));
         }
 
-        updateCustomMixError(message);
+        updateCustomMixError(color, message);
     }
 
-    function setCustomMixWeight(botId, weight, options = {}) {
+    function setCustomMixWeight(color, botId, weight, options = {}) {
         const { skipComplement = false, skipChangeHandler = false } = options;
-        const controls = customMixControls.get(botId);
-        const state = customMixState[botId];
+        const controlsMap = customMixControls[color];
+        const stateMap = customMixState[color];
+        if (!controlsMap || !stateMap) {
+            return;
+        }
+        const controls = controlsMap.get(botId);
+        const state = stateMap[botId];
         if (!controls || !state) {
             return;
         }
@@ -318,24 +377,28 @@ document.addEventListener("DOMContentLoaded", () => {
         const clamped = Math.max(0, Math.min(100, rounded));
         state.weight = clamped;
 
-        isUpdatingCustomMixInternally = true;
+        isUpdatingCustomMixInternally[color] = true;
         controls.slider.value = String(clamped);
         controls.number.value = String(clamped);
-        isUpdatingCustomMixInternally = false;
+        isUpdatingCustomMixInternally[color] = false;
 
         if (!skipComplement) {
-            adjustComplementIfNeeded(botId);
+            adjustComplementIfNeeded(color, botId);
         }
 
         if (!skipChangeHandler) {
-            handleCustomMixChange();
+            handleCustomMixChange(color);
         }
     }
 
-    function adjustComplementIfNeeded(botId) {
+    function adjustComplementIfNeeded(color, botId) {
+        const state = customMixState[color];
+        if (!state) {
+            return;
+        }
         const selectedBots = botOptions.filter(bot => {
-            const state = customMixState[bot.id];
-            return state && state.selected;
+            const entry = state[bot.id];
+            return entry && entry.selected;
         });
 
         if (selectedBots.length !== 2) {
@@ -347,44 +410,53 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const targetWeight = Math.max(0, 100 - customMixState[botId].weight);
-        setCustomMixWeight(otherBot.id, targetWeight, { skipComplement: true, skipChangeHandler: true });
+        const targetWeight = Math.max(0, 100 - state[botId].weight);
+        setCustomMixWeight(color, otherBot.id, targetWeight, { skipComplement: true, skipChangeHandler: true });
     }
 
-    function setCustomMixSelected(botId, selected, options = {}) {
+    function setCustomMixSelected(color, botId, selected, options = {}) {
         const { skipChangeHandler = false } = options;
-        const controls = customMixControls.get(botId);
-        const state = customMixState[botId];
+        const controlsMap = customMixControls[color];
+        const stateMap = customMixState[color];
+        if (!controlsMap || !stateMap) {
+            return;
+        }
+        const controls = controlsMap.get(botId);
+        const state = stateMap[botId];
         if (!controls || !state) {
             return;
         }
 
         state.selected = selected;
 
-        isUpdatingCustomMixInternally = true;
+        isUpdatingCustomMixInternally[color] = true;
         controls.checkbox.checked = selected;
         controls.slider.disabled = !selected;
         controls.number.disabled = !selected;
         controls.slider.value = String(state.weight);
         controls.number.value = String(state.weight);
-        isUpdatingCustomMixInternally = false;
+        isUpdatingCustomMixInternally[color] = false;
 
         if (!selected) {
-            setCustomMixWeight(botId, 0, { skipComplement: true, skipChangeHandler: true });
+            setCustomMixWeight(color, botId, 0, { skipComplement: true, skipChangeHandler: true });
         }
 
         if (!skipChangeHandler) {
-            handleCustomMixChange();
+            handleCustomMixChange(color);
         }
     }
 
-    function renderCustomMixOptions() {
-        if (!customMixOptions) {
+    function renderCustomMixOptions(color) {
+        const elements = customMixElements[color];
+        if (!elements || !elements.options) {
             return;
         }
 
-        customMixOptions.innerHTML = '';
-        customMixControls.clear();
+        elements.options.innerHTML = '';
+        const controlsMap = customMixControls[color];
+        if (controlsMap) {
+            controlsMap.clear();
+        }
 
         botOptions.forEach(bot => {
             const row = document.createElement('div');
@@ -395,11 +467,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const label = document.createElement('label');
             label.className = 'custom-mix-label';
-            label.setAttribute('for', `custom-mix-${bot.id}`);
+            label.setAttribute('for', `custom-mix-${color}-${bot.id}`);
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
-            checkbox.id = `custom-mix-${bot.id}`;
+            checkbox.id = `custom-mix-${color}-${bot.id}`;
             checkbox.className = 'custom-mix-checkbox';
 
             const labelText = document.createElement('span');
@@ -442,82 +514,103 @@ document.addEventListener("DOMContentLoaded", () => {
 
             row.appendChild(header);
             row.appendChild(controlsWrapper);
-            customMixOptions.appendChild(row);
+            elements.options.appendChild(row);
 
-            customMixControls.set(bot.id, { checkbox, slider, number });
+            controlsMap.set(bot.id, { checkbox, slider, number });
+
+            const state = customMixState[color][bot.id];
 
             checkbox.addEventListener('change', () => {
-                if (isUpdatingCustomMixInternally) {
+                if (isUpdatingCustomMixInternally[color]) {
                     return;
                 }
 
                 if (!checkbox.checked) {
-                    const selectedCount = getSelectedCustomMixCount();
-                    if (customMixState[bot.id].selected && selectedCount <= 2) {
+                    const selectedCount = getSelectedCustomMixCount(color);
+                    if (state.selected && selectedCount <= 2) {
                         checkbox.checked = true;
                         return;
                     }
                 }
 
-                setCustomMixSelected(bot.id, checkbox.checked);
+                setCustomMixSelected(color, bot.id, checkbox.checked);
             });
 
             slider.addEventListener('input', () => {
-                if (isUpdatingCustomMixInternally || slider.disabled) {
+                if (isUpdatingCustomMixInternally[color] || slider.disabled) {
                     return;
                 }
-                setCustomMixWeight(bot.id, parseInt(slider.value, 10));
+                setCustomMixWeight(color, bot.id, parseInt(slider.value, 10));
             });
 
             number.addEventListener('input', () => {
-                if (isUpdatingCustomMixInternally || number.disabled) {
+                if (isUpdatingCustomMixInternally[color] || number.disabled) {
                     return;
                 }
                 const value = parseInt(number.value, 10);
                 if (Number.isNaN(value)) {
                     return;
                 }
-                setCustomMixWeight(bot.id, value);
+                setCustomMixWeight(color, bot.id, value);
             });
 
             number.addEventListener('change', () => {
-                if (isUpdatingCustomMixInternally || number.disabled) {
+                if (isUpdatingCustomMixInternally[color] || number.disabled) {
                     return;
                 }
                 const value = parseInt(number.value, 10);
-                setCustomMixWeight(bot.id, Number.isNaN(value) ? 0 : value);
+                setCustomMixWeight(color, bot.id, Number.isNaN(value) ? 0 : value);
             });
         });
+
+        botOptions.forEach(bot => {
+            const state = customMixState[color][bot.id];
+            if (!state) {
+                return;
+            }
+            setCustomMixSelected(color, bot.id, state.selected, { skipChangeHandler: true });
+            setCustomMixWeight(color, bot.id, state.weight, { skipComplement: true, skipChangeHandler: true });
+        });
+
+        handleCustomMixChange(color);
     }
 
-    function initializeCustomMixDefaults() {
+    function initializeCustomMixDefaults(color) {
         if (!botOptions.length) {
+            lastValidCustomMix[color] = [];
             return;
         }
 
         botOptions.forEach(bot => {
-            setCustomMixSelected(bot.id, false, { skipChangeHandler: true });
+            setCustomMixSelected(color, bot.id, false, { skipChangeHandler: true });
         });
 
         if (botOptions.length >= 2) {
-            setCustomMixSelected(botOptions[0].id, true, { skipChangeHandler: true });
-            setCustomMixSelected(botOptions[1].id, true, { skipChangeHandler: true });
-            setCustomMixWeight(botOptions[0].id, 50, { skipComplement: true, skipChangeHandler: true });
-            setCustomMixWeight(botOptions[1].id, 50, { skipComplement: true, skipChangeHandler: true });
+            setCustomMixSelected(color, botOptions[0].id, true, { skipChangeHandler: true });
+            setCustomMixSelected(color, botOptions[1].id, true, { skipChangeHandler: true });
+            setCustomMixWeight(color, botOptions[0].id, 50, { skipComplement: true, skipChangeHandler: true });
+            setCustomMixWeight(color, botOptions[1].id, 50, { skipComplement: true, skipChangeHandler: true });
+            lastValidCustomMix[color] = [
+                { id: botOptions[0].id, weight: 50 },
+                { id: botOptions[1].id, weight: 50 }
+            ];
         } else if (botOptions.length === 1) {
-            setCustomMixSelected(botOptions[0].id, true, { skipChangeHandler: true });
-            setCustomMixWeight(botOptions[0].id, 100, { skipComplement: true, skipChangeHandler: true });
+            setCustomMixSelected(color, botOptions[0].id, true, { skipChangeHandler: true });
+            setCustomMixWeight(color, botOptions[0].id, 100, { skipComplement: true, skipChangeHandler: true });
+            lastValidCustomMix[color] = [{ id: botOptions[0].id, weight: 100 }];
+        } else {
+            lastValidCustomMix[color] = [];
         }
 
-        handleCustomMixChange();
+        handleCustomMixChange(color);
     }
 
-    function getActiveCustomMixEntries() {
-        const summary = getCustomMixSummary();
+    function getActiveCustomMixEntries(color) {
+        const summary = getCustomMixSummary(color);
         if (summary.valid) {
             return summary.entries;
         }
-        return lastValidCustomMix;
+        return lastValidCustomMix[color];
     }
 
     function chooseBotFromMix(entries) {
@@ -541,13 +634,44 @@ document.addEventListener("DOMContentLoaded", () => {
         return entries[entries.length - 1].id;
     }
 
+    function getBotControlledColors() {
+        if (gameMode === 'onePlayer') {
+            return ['b'];
+        }
+        if (gameMode === 'zeroPlayer') {
+            return ['w', 'b'];
+        }
+        return [];
+    }
+
+    function isColorBotControlled(color) {
+        return getBotControlledColors().includes(color);
+    }
+
     function updateCustomMixVisibility() {
-        if (!customMixContainer) {
+        ['w', 'b'].forEach(color => {
+            const elements = customMixElements[color];
+            if (!elements || !elements.container) {
+                return;
+            }
+            const shouldShow = isColorBotControlled(color) && botDifficulty[color] === 'custom';
+            elements.container.style.display = shouldShow ? 'block' : 'none';
+        });
+    }
+
+    function updateBotSelectionVisibility() {
+        if (!botSelection) {
             return;
         }
-
-        const shouldShow = gameMode === 'onePlayer' && botDifficulty === 'custom';
-        customMixContainer.style.display = shouldShow ? 'block' : 'none';
+        const activeColors = getBotControlledColors();
+        botSelection.style.display = activeColors.length ? 'flex' : 'none';
+        ['w', 'b'].forEach(color => {
+            const group = botSelectionGroups[color];
+            if (!group) {
+                return;
+            }
+            group.style.display = activeColors.includes(color) ? 'flex' : 'none';
+        });
     }
 
     function isStockfishEvaluationEnabled() {
@@ -555,19 +679,21 @@ document.addEventListener("DOMContentLoaded", () => {
             return false;
         }
 
-        if (botDifficulty === 'stockfish') {
-            return true;
-        }
-
-        if (botDifficulty === 'custom') {
-            const summary = getCustomMixSummary();
-            if (summary.valid) {
-                return summary.entries.some(entry => entry.id === 'stockfish');
+        return getBotControlledColors().some(color => {
+            const selection = botDifficulty[color];
+            if (selection === 'stockfish') {
+                return true;
             }
-            return lastValidCustomMix.some(entry => entry.id === 'stockfish');
-        }
-
-        return false;
+            if (selection === 'custom') {
+                const summary = getCustomMixSummary(color);
+                if (summary.valid) {
+                    return summary.entries.some(entry => entry.id === 'stockfish');
+                }
+                const lastValid = lastValidCustomMix[color] || [];
+                return lastValid.some(entry => entry.id === 'stockfish');
+            }
+            return false;
+        });
     }
 
     function cloneBoardMatrix(board) {
@@ -949,6 +1075,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function applySetupToGame(setup) {
+        cancelScheduledBotMove();
         currentInitialSetup = cloneSetup(setup);
         const promotionUI = document.querySelector('.promotion-ui');
         if (promotionUI) {
@@ -978,6 +1105,7 @@ document.addEventListener("DOMContentLoaded", () => {
         historyStates.push(captureDetailedState());
         updateMoveHistoryUI();
         evaluateBoard();
+        scheduleBotMoveIfNeeded({ force: true });
     }
 
     function sanitizeEnPassantValue(value) {
@@ -1494,7 +1622,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const square = event.currentTarget;
         const piece = square.querySelector(".piece");
 
-        if (gameMode === "onePlayer" && turn === "b") return; // Prevent player from moving black in bot mode
+        if (isColorBotControlled(turn)) return; // Prevent player from moving when bots control the turn
 
         if (selectedPiece) {
             if (selectedPiece.parentElement === square) {
@@ -1515,9 +1643,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     movePiece(square);
                     removeMoveDots();
                     selectedPiece = null;
-                    if (gameMode === "onePlayer" && turn === "b") {
-                        setTimeout(botMove, 500); // Bot moves automatically after white
-                    }
                 }
             } else if (piece && piece.dataset.color === selectedPiece.dataset.color) {
                 // Select a different piece
@@ -1779,9 +1904,17 @@ document.addEventListener("DOMContentLoaded", () => {
         engine.postMessage('go depth 12');
     };
 
-    const performStockfishBotMove = () => {
+    const performStockfishBotMove = (color) => {
         requestStockfish(best => {
-            if (!best) return;
+            if (!best || best === '(none)' || best === '0000') {
+                handleNoAvailableMoves(color);
+                return;
+            }
+
+            if (turn !== color || !isColorBotControlled(color) || gameOver) {
+                return;
+            }
+
             const fromFile = best[0];
             const fromRank = best[1];
             const toFile = best[2];
@@ -1791,17 +1924,34 @@ document.addEventListener("DOMContentLoaded", () => {
             const toRow = 8 - parseInt(toRank, 10);
             const toCol = fileLetters.indexOf(toFile);
             const piece = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"] .piece`);
-            if (piece) {
+            if (piece && piece.dataset.color === color) {
                 movePieceToSquare(piece, toRow, toCol, best[4]);
+            } else {
+                scheduleBotMoveIfNeeded({ force: true });
             }
         });
     };
 
-    const performRandomBotMove = () => {
-        const pieces = Array.from(document.querySelectorAll('.piece'))
-            .filter(p => p.dataset.color === 'b');
+    function handleNoAvailableMoves(color) {
+        cancelScheduledBotMove();
+        if (gameOver) {
+            return;
+        }
+        const boardCopy = createBoardCopy();
+        const inCheck = isKingInCheck(boardCopy, color);
+        gameOver = true;
+        if (inCheck) {
+            const winner = color === 'w' ? 'Black' : 'White';
+            alert(`Game over! ${winner} wins by checkmate.`);
+        } else {
+            alert('Game over! Stalemate.');
+        }
+    }
 
-        let allMoves = [];
+    const performRandomBotMove = (color) => {
+        const pieces = Array.from(document.querySelectorAll(`.piece[data-color='${color}']`));
+
+        const allMoves = [];
 
         pieces.forEach(piece => {
             const row = parseInt(piece.parentElement.dataset.row, 10);
@@ -1814,7 +1964,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (allMoves.length === 0) {
-            alert("Game over! White wins by checkmate or stalemate.");
+            handleNoAvailableMoves(color);
             return;
         }
 
@@ -1892,12 +2042,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return score;
     };
 
-    const performWorstBotMove = () => {
-        const pieces = Array.from(document.querySelectorAll('.piece'))
-            .filter(p => p.dataset.color === 'b');
+    const performWorstBotMove = (color) => {
+        const pieces = Array.from(document.querySelectorAll(`.piece[data-color='${color}']`));
 
         let chosenMove = null;
-        let worstScore = -Infinity;
+        let worstScore = color === 'w' ? Infinity : -Infinity;
         const baseBoard = createBoardCopy();
 
         pieces.forEach(piece => {
@@ -1913,7 +2062,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 applyMoveForEvaluation(boardCopy, fromRow, fromCol, toRow, toCol, pieceData);
                 const score = evaluateMaterialScore(boardCopy);
-                if (score > worstScore) {
+                if (color === 'w') {
+                    if (score < worstScore) {
+                        worstScore = score;
+                        chosenMove = { piece, toRow, toCol };
+                    }
+                } else if (score > worstScore) {
                     worstScore = score;
                     chosenMove = { piece, toRow, toCol };
                 }
@@ -1921,7 +2075,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (!chosenMove) {
-            alert("Game over! White wins by checkmate or stalemate.");
+            handleNoAvailableMoves(color);
             return;
         }
 
@@ -1929,14 +2083,15 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const botStrategies = {
-        random: performRandomBotMove,
-        worst: performWorstBotMove,
-        stockfish: performStockfishBotMove
+        random: (color) => performRandomBotMove(color),
+        worst: (color) => performWorstBotMove(color),
+        stockfish: (color) => performStockfishBotMove(color)
     };
 
-    function getBotStrategyIdForTurn() {
-        if (botDifficulty === 'custom') {
-            const entries = getActiveCustomMixEntries();
+    function getBotStrategyIdForColor(color) {
+        const selection = botDifficulty[color] || 'random';
+        if (selection === 'custom') {
+            const entries = getActiveCustomMixEntries(color);
             const chosen = chooseBotFromMix(entries);
             if (chosen && botStrategies[chosen]) {
                 return chosen;
@@ -1944,30 +2099,63 @@ document.addEventListener("DOMContentLoaded", () => {
             return 'random';
         }
 
-        if (botStrategies[botDifficulty]) {
-            return botDifficulty;
+        if (botStrategies[selection]) {
+            return selection;
         }
 
         return 'random';
     }
 
-    const botMove = () => {
-        if (gameOver) {
+    function cancelScheduledBotMove() {
+        if (pendingBotMoveTimeout) {
+            clearTimeout(pendingBotMoveTimeout);
+            pendingBotMoveTimeout = null;
+        }
+    }
+
+    function scheduleBotMoveIfNeeded(options = {}) {
+        const { force = false } = options;
+        if (pendingBotMoveTimeout) {
+            if (!force) {
+                return;
+            }
+            clearTimeout(pendingBotMoveTimeout);
+            pendingBotMoveTimeout = null;
+        }
+
+        if (!isColorBotControlled(turn) || gameOver || pendingPromotion) {
             return;
         }
 
-        if (gameMode !== "onePlayer" || turn !== "b") {
+        pendingBotMoveTimeout = setTimeout(() => {
+            pendingBotMoveTimeout = null;
+            botMove(turn);
+        }, 500);
+    }
+
+    const botMove = (color = turn) => {
+        if (gameOver || pendingPromotion) {
+            return;
+        }
+
+        if (!isColorBotControlled(color)) {
+            return;
+        }
+
+        if (turn !== color) {
             return;
         }
 
         if (historyStates.length && currentHistoryIndex !== historyStates.length - 1) {
             navigateToMove(historyStates.length - 1);
+            scheduleBotMoveIfNeeded({ force: true });
+            return;
         }
 
-        const strategyId = getBotStrategyIdForTurn();
+        const strategyId = getBotStrategyIdForColor(color);
         const strategy = botStrategies[strategyId] || botStrategies.random;
         if (strategy) {
-            strategy();
+            strategy(color);
         }
     };
 
@@ -2238,6 +2426,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const popup = document.querySelector('.checkmate-popup');
         if (popup) {
             popup.style.display = currentHistoryIndex === historyStates.length - 1 ? 'flex' : 'none';
+        }
+        if (currentHistoryIndex === historyStates.length - 1) {
+            scheduleBotMoveIfNeeded({ force: true });
+        } else {
+            cancelScheduledBotMove();
         }
     };
 
@@ -2772,6 +2965,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const displayCheckmatePopup = () => {
         gameOver = true;
+        cancelScheduledBotMove();
         if (document.querySelector('.checkmate-popup')) {
             return;
         }
@@ -2802,24 +2996,12 @@ document.addEventListener("DOMContentLoaded", () => {
             fullmoveNumber++;
         }
 
-        // If in one-player mode and it's Black's turn, make the bot move
-        if (gameMode === "onePlayer" && turn === "b") {
-            setTimeout(botMove, 500); // Give a delay so it’s visually clear
-        }
+        scheduleBotMoveIfNeeded();
     };
 
     window.toggleBotSelection = function() {
-        var modeValue = document.getElementById('gameModeSelect').value;
-        var botSelectionElement = document.getElementById('botSelection');
-        if (botSelectionElement) {
-            botSelectionElement.style.display = modeValue === 'onePlayer' ? 'block' : 'none';
-        }
-        var customMixElement = document.getElementById('customMixContainer');
-        if (customMixElement) {
-            var difficultyValue = document.getElementById('botDifficulty').value;
-            const shouldShow = modeValue === 'onePlayer' && difficultyValue === 'custom';
-            customMixElement.style.display = shouldShow ? 'block' : 'none';
-        }
+        updateBotSelectionVisibility();
+        updateCustomMixVisibility();
     };
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
@@ -2848,9 +3030,12 @@ document.addEventListener("DOMContentLoaded", () => {
         pendingPromotion.moveDetails.promotionType = type;
         finalizeMove(pendingPromotion.moveDetails);
     };
-    renderCustomMixOptions();
-    initializeCustomMixDefaults();
+    ['w', 'b'].forEach(color => {
+        renderCustomMixOptions(color);
+        initializeCustomMixDefaults(color);
+    });
     updateCustomMixVisibility();
+    updateBotSelectionVisibility();
 
     renderPiecePalette();
     updateCustomSetupButtonVisibility();
