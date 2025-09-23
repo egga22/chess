@@ -20,7 +20,14 @@
         <select id="botDifficulty">
             <option value="random">Random Moves</option>
             <option value="stockfish">Stockfish</option>
+            <option value="custom">Custom mix</option>
         </select>
+        <div id="customMixContainer" class="custom-mix-container" style="display: none;">
+            <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
+            <div id="customMixOptions" class="custom-mix-options"></div>
+            <div id="customMixSummary" class="custom-mix-summary">Total: 0%</div>
+            <div id="customMixError" class="custom-mix-error"></div>
+        </div>
     </div>
     <div id="boardArea">
         <div id="boardWrapper">

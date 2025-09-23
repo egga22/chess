@@ -264,3 +264,88 @@ body {
     background-color: #4caf50;
     color: #fff;
 }
+
+.custom-mix-container {
+    margin-top: 12px;
+    padding: 12px;
+    background: #ffffff;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.custom-mix-description {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #333;
+}
+
+.custom-mix-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.custom-mix-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid #ededed;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.custom-mix-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.custom-mix-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.custom-mix-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.custom-mix-controls input[type="range"] {
+    flex: 1;
+}
+
+.custom-mix-number {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 72px;
+}
+
+.custom-mix-number input {
+    width: 60px;
+    padding: 4px;
+}
+
+.custom-mix-controls input[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.custom-mix-summary {
+    margin-top: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.custom-mix-error {
+    margin-top: 4px;
+    min-height: 18px;
+    font-size: 13px;
+    color: #c0392b;
+}
