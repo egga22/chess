@@ -7,25 +7,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const customMixOptions = document.getElementById('customMixOptions');
     const customMixSummary = document.getElementById('customMixSummary');
     const customMixError = document.getElementById('customMixError');
-    const gameTypeSelect = document.getElementById('gameTypeSelect');
-    const customSetupContainer = document.getElementById('customSetupContainer');
-    const customPiecePalette = document.getElementById('customPiecePalette');
-    const customSideToMoveSelect = document.getElementById('customSideToMove');
-    const customEnPassantSelect = document.getElementById('customEnPassant');
-    const customFullmoveInput = document.getElementById('customFullmove');
-    const customCastleWhiteKing = document.getElementById('customCastleWhiteKing');
-    const customCastleWhiteQueen = document.getElementById('customCastleWhiteQueen');
-    const customCastleBlackKing = document.getElementById('customCastleBlackKing');
-    const customCastleBlackQueen = document.getElementById('customCastleBlackQueen');
-    const customSetupError = document.getElementById('customSetupError');
-    const customFenInput = document.getElementById('customFenInput');
-    const customFenStatus = document.getElementById('customFenStatus');
-    const loadFenButton = document.getElementById('loadFenButton');
-    const clearCustomBoardButton = document.getElementById('clearCustomBoard');
-    const resetCustomBoardButton = document.getElementById('resetCustomBoard');
-    const enterCustomEditorButton = document.getElementById('enterCustomEditor');
-    const applyCustomSetupButton = document.getElementById('applyCustomSetup');
-    const stockfishStatusElement = document.getElementById('stockfishStatus');
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
@@ -48,8 +29,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let botDifficulty = botDifficultySelect.value;
     let fullmoveNumber = 1;
     let engine;
-    let stockfishAvailable = null;
-    let stockfishUnavailableMessage = '';
     let gameOver = false;
     const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
     const moveHistoryList = document.getElementById('moveHistoryList');
@@ -59,30 +38,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let pendingPromotion = null;
     const fileLetters = 'abcdefgh';
     const pieceNotationMap = { pawn: '', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };
-    const editorPieces = [
-        { type: 'king', color: 'w', label: 'White King' },
-        { type: 'queen', color: 'w', label: 'White Queen' },
-        { type: 'rook', color: 'w', label: 'White Rook' },
-        { type: 'bishop', color: 'w', label: 'White Bishop' },
-        { type: 'knight', color: 'w', label: 'White Knight' },
-        { type: 'pawn', color: 'w', label: 'White Pawn' },
-        { type: 'king', color: 'b', label: 'Black King' },
-        { type: 'queen', color: 'b', label: 'Black Queen' },
-        { type: 'rook', color: 'b', label: 'Black Rook' },
-        { type: 'bishop', color: 'b', label: 'Black Bishop' },
-        { type: 'knight', color: 'b', label: 'Black Knight' },
-        { type: 'pawn', color: 'b', label: 'Black Pawn' }
-    ];
-    const editorPaletteButtons = [];
-
-    let gameType = 'standard';
-    let currentCastlingConfig = null;
-    let forcedEnPassantTarget = null;
-    let customEditorActive = false;
-    let customStartingPosition = null;
-    let customEditorState = null;
-    let editorSelectedTool = { type: null, color: null };
-    let pieceIdCounter = 0;
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
@@ -96,32 +51,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     botDifficultySelect.addEventListener('change', () => {
-        const selectedValue = botDifficultySelect.value;
-        if (selectedValue === 'stockfish' && stockfishAvailable === false) {
-            botDifficultySelect.value = botDifficulty;
-            const message = stockfishUnavailableMessage || 'The Stockfish engine is not available in this browser.';
-            updateStockfishStatus(message, { type: 'error' });
-            return;
-        }
-
-        botDifficulty = selectedValue;
+        botDifficulty = botDifficultySelect.value;
         updateCustomMixVisibility();
         evaluateBoard();
     });
-
-    if (gameTypeSelect) {
-        gameType = gameTypeSelect.value || 'standard';
-        gameTypeSelect.addEventListener('change', () => {
-            gameType = gameTypeSelect.value;
-            updateCustomSetupVisibility();
-            if (gameType === 'custom') {
-                enterCustomSetupMode();
-            } else {
-                customEditorActive = false;
-                resetGame();
-            }
-        });
-    }
 
     function getSelectedCustomMixCount() {
         return botOptions.reduce((count, bot) => {
@@ -397,16 +330,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function getActiveCustomMixEntries() {
         const summary = getCustomMixSummary();
-        const entries = summary.valid ? summary.entries : lastValidCustomMix;
-        if (!entries) {
-            return [];
+        if (summary.valid) {
+            return summary.entries;
         }
-
-        if (stockfishAvailable === false) {
-            return entries.filter(entry => entry.id !== 'stockfish');
-        }
-
-        return entries;
+        return lastValidCustomMix;
     }
 
     function chooseBotFromMix(entries) {
@@ -439,348 +366,101 @@ document.addEventListener("DOMContentLoaded", () => {
         customMixContainer.style.display = shouldShow ? 'block' : 'none';
     }
 
-    function updateStockfishStatus(message = '', options = {}) {
-        if (!stockfishStatusElement) {
-            return;
+    function isStockfishEvaluationEnabled() {
+        if (botDifficulty === 'stockfish') {
+            return true;
         }
 
-        stockfishStatusElement.textContent = message;
-        stockfishStatusElement.style.display = message ? 'block' : 'none';
-
-        if (message && options.type === 'error') {
-            stockfishStatusElement.classList.add('stockfish-status--error');
-        } else {
-            stockfishStatusElement.classList.remove('stockfish-status--error');
-        }
-    }
-
-    function removeStockfishFromLastValidMix() {
-        if (!Array.isArray(lastValidCustomMix) || !lastValidCustomMix.length) {
-            return;
-        }
-        lastValidCustomMix = lastValidCustomMix.filter(entry => entry.id !== 'stockfish');
-    }
-
-    function updateCustomSetupVisibility() {
-        if (!customSetupContainer) {
-            return;
-        }
-        customSetupContainer.style.display = gameType === 'custom' ? 'block' : 'none';
-    }
-
-    function setCustomSetupMessage(message = '', options = {}) {
-        if (!customSetupError) {
-            return;
-        }
-        customSetupError.textContent = message;
-        if (options.isSuccess) {
-            customSetupError.style.color = '#2e7d32';
-        } else {
-            customSetupError.style.color = '#c0392b';
-        }
-    }
-
-    function setCustomFenStatus(message = '', isError = false) {
-        if (!customFenStatus) {
-            return;
-        }
-        customFenStatus.textContent = message;
-        customFenStatus.style.color = isError ? '#c0392b' : '#2e7d32';
-    }
-
-    function createEmptyBoardArray() {
-        return Array.from({ length: 8 }, () => Array(8).fill(null));
-    }
-
-    function cloneBoardState(board) {
-        if (!board) {
-            return createEmptyBoardArray();
-        }
-        return board.map(row => row.map(cell => {
-            if (!cell) {
-                return null;
+        if (botDifficulty === 'custom') {
+            const summary = getCustomMixSummary();
+            if (summary.valid) {
+                return summary.entries.some(entry => entry.id === 'stockfish');
             }
-            return {
-                type: cell.type,
-                color: cell.color,
-                moved: !!cell.moved,
-                id: cell.id || null
-            };
-        }));
-    }
-
-    function cloneCastlingConfig(config) {
-        if (!config) {
-            return {
-                w: { row: 7, kingStartCol: 4, kingSide: { startCol: 7, targetCol: 5 }, queenSide: { startCol: 0, targetCol: 3 } },
-                b: { row: 0, kingStartCol: 4, kingSide: { startCol: 7, targetCol: 5 }, queenSide: { startCol: 0, targetCol: 3 } }
-            };
-        }
-        return {
-            w: {
-                row: config.w.row,
-                kingStartCol: config.w.kingStartCol,
-                kingSide: { startCol: config.w.kingSide.startCol, targetCol: config.w.kingSide.targetCol },
-                queenSide: { startCol: config.w.queenSide.startCol, targetCol: config.w.queenSide.targetCol }
-            },
-            b: {
-                row: config.b.row,
-                kingStartCol: config.b.kingStartCol,
-                kingSide: { startCol: config.b.kingSide.startCol, targetCol: config.b.kingSide.targetCol },
-                queenSide: { startCol: config.b.queenSide.startCol, targetCol: config.b.queenSide.targetCol }
-            }
-        };
-    }
-
-    function generatePieceId() {
-        pieceIdCounter += 1;
-        return `piece-${pieceIdCounter}`;
-    }
-
-    function updatePieceIdCounter(boardState) {
-        if (!boardState) {
-            return;
-        }
-        let maxValue = pieceIdCounter;
-        boardState.forEach(row => {
-            row.forEach(cell => {
-                if (cell && cell.id) {
-                    const match = cell.id.match(/piece-?(\d+)/);
-                    if (match) {
-                        const value = parseInt(match[1], 10);
-                        if (!Number.isNaN(value)) {
-                            maxValue = Math.max(maxValue, value);
-                        }
-                    }
-                }
-            });
-        });
-        pieceIdCounter = maxValue;
-    }
-
-    function buildCastlingConfig(options = {}) {
-        const white = options.w || {};
-        const black = options.b || {};
-        return {
-            w: {
-                row: white.row ?? 7,
-                kingStartCol: white.kingStartCol ?? 4,
-                kingSide: { startCol: white.kingSide ?? null, targetCol: 5 },
-                queenSide: { startCol: white.queenSide ?? null, targetCol: 3 }
-            },
-            b: {
-                row: black.row ?? 0,
-                kingStartCol: black.kingStartCol ?? 4,
-                kingSide: { startCol: black.kingSide ?? null, targetCol: 5 },
-                queenSide: { startCol: black.queenSide ?? null, targetCol: 3 }
-            }
-        };
-    }
-
-    function createStandardPosition() {
-        pieceIdCounter = 0;
-        const board = createEmptyBoardArray();
-        const backRank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
-
-        for (let col = 0; col < 8; col++) {
-            board[7][col] = { type: backRank[col], color: 'w', moved: false, id: generatePieceId() };
-            board[6][col] = { type: 'pawn', color: 'w', moved: false, id: generatePieceId() };
-            board[1][col] = { type: 'pawn', color: 'b', moved: false, id: generatePieceId() };
-            board[0][col] = { type: backRank[col], color: 'b', moved: false, id: generatePieceId() };
+            return lastValidCustomMix.some(entry => entry.id === 'stockfish');
         }
 
-        const castlingConfig = buildCastlingConfig({
-            w: { row: 7, kingStartCol: 4, kingSide: 7, queenSide: 0 },
-            b: { row: 0, kingStartCol: 4, kingSide: 7, queenSide: 0 }
-        });
-
-        return {
-            board,
-            turn: 'w',
-            fullmoveNumber: 1,
-            castlingConfig,
-            forcedEnPassantTarget: null,
-            lastMove: null
-        };
+        return false;
     }
 
-    function generateChess960BackRank() {
-        const positions = Array(8).fill(null);
-        const evenSquares = [0, 2, 4, 6];
-        const oddSquares = [1, 3, 5, 7];
-
-        function takeRandom(list) {
-            const index = Math.floor(Math.random() * list.length);
-            return list.splice(index, 1)[0];
-        }
-
-        positions[takeRandom(evenSquares)] = 'bishop';
-        positions[takeRandom(oddSquares)] = 'bishop';
-
-        const remaining = [];
-        for (let i = 0; i < 8; i++) {
-            if (!positions[i]) {
-                remaining.push(i);
-            }
-        }
-
-        const queenIndex = takeRandom(remaining);
-        positions[queenIndex] = 'queen';
-
-        const knightIndex1 = takeRandom(remaining);
-        positions[knightIndex1] = 'knight';
-        const knightIndex2 = takeRandom(remaining);
-        positions[knightIndex2] = 'knight';
-
-        remaining.sort((a, b) => a - b);
-        positions[remaining[0]] = 'rook';
-        positions[remaining[1]] = 'king';
-        positions[remaining[2]] = 'rook';
-
-        return positions;
-    }
-
-    function generateChess960Position() {
-        pieceIdCounter = 0;
-        const board = createEmptyBoardArray();
-        const backRank = generateChess960BackRank();
-
-        for (let col = 0; col < 8; col++) {
-            const pieceType = backRank[col];
-            board[7][col] = { type: pieceType, color: 'w', moved: false, id: generatePieceId() };
-            board[0][col] = { type: pieceType, color: 'b', moved: false, id: generatePieceId() };
-            board[6][col] = { type: 'pawn', color: 'w', moved: false, id: generatePieceId() };
-            board[1][col] = { type: 'pawn', color: 'b', moved: false, id: generatePieceId() };
-        }
-
-        const kingCol = backRank.indexOf('king');
-        const rookCols = [];
-        backRank.forEach((value, index) => {
-            if (value === 'rook') {
-                rookCols.push(index);
-            }
-        });
-        const queenSideRookCol = rookCols.filter(col => col < kingCol).sort((a, b) => b - a)[0] ?? null;
-        const kingSideRookCol = rookCols.filter(col => col > kingCol).sort((a, b) => a - b)[0] ?? null;
-
-        const castlingConfig = buildCastlingConfig({
-            w: { row: 7, kingStartCol: kingCol, kingSide: kingSideRookCol, queenSide: queenSideRookCol },
-            b: { row: 0, kingStartCol: kingCol, kingSide: kingSideRookCol, queenSide: queenSideRookCol }
-        });
-
-        return {
-            board,
-            turn: 'w',
-            fullmoveNumber: 1,
-            castlingConfig,
-            forcedEnPassantTarget: null,
-            lastMove: null
-        };
-    }
-
-    function getStartingPositionForCurrentGameType() {
-        if (gameType === 'chess960') {
-            return generateChess960Position();
-        }
-        if (gameType === 'custom') {
-            return customStartingPosition ? clonePosition(customStartingPosition) : null;
-        }
-        return createStandardPosition();
-    }
-
-    function clonePosition(position) {
-        if (!position) {
-            return null;
-        }
-        return {
-            board: cloneBoardState(position.board),
-            turn: position.turn,
-            fullmoveNumber: position.fullmoveNumber,
-            castlingConfig: cloneCastlingConfig(position.castlingConfig),
-            forcedEnPassantTarget: position.forcedEnPassantTarget || null,
-            lastMove: position.lastMove ? { ...position.lastMove } : null
-        };
-    }
-
-    function applyPosition(position) {
+    // Define resetGame function if not already defined
+    const resetGame = () => {
         const promotionUI = document.querySelector('.promotion-ui');
         if (promotionUI) {
             promotionUI.remove();
         }
         pendingPromotion = null;
-        selectedPiece = null;
-        gameOver = false;
-
-        const boardState = cloneBoardState(position.board);
-        currentCastlingConfig = cloneCastlingConfig(position.castlingConfig);
-        forcedEnPassantTarget = position.forcedEnPassantTarget || null;
-        lastMove = position.lastMove ? { ...position.lastMove } : null;
-        turn = position.turn || 'w';
-        fullmoveNumber = position.fullmoveNumber || 1;
-
         chessboard.innerHTML = '';
-        createBoard(boardState);
-        updatePieceIdCounter(boardState);
-
+        createBoard();
+        selectedPiece = null;
+        turn = 'w';
+        lastMove = null;
+        fullmoveNumber = 1;
+        gameOver = false;
         moveHistoryEntries = [];
         historyStates = [];
         currentHistoryIndex = 0;
-
         document.querySelectorAll('.check').forEach(square => square.classList.remove('check'));
         const popup = document.querySelector('.checkmate-popup');
         if (popup) {
             popup.remove();
         }
-
         historyStates.push(captureDetailedState());
         updateMoveHistoryUI();
         evaluateBoard();
-    }
-
-    const resetGame = (position = null) => {
-        const startPosition = position || getStartingPositionForCurrentGameType();
-        if (!startPosition) {
-            enterCustomSetupMode();
-            return;
-        }
-        exitCustomSetupMode();
-        applyPosition(startPosition);
-        updateEngineChess960Option();
     };
-
     function createBoard(boardState = null) {
-        chessboard.innerHTML = '';
-        chessboard.classList.toggle('editor-active', customEditorActive);
-        chessboard.style.display = 'grid';
-        chessboard.style.gridTemplateColumns = 'repeat(8, 70px)';
-        chessboard.style.gridTemplateRows = 'repeat(8, 70px)';
-        chessboard.style.width = '560px';
-        chessboard.style.height = '560px';
-        chessboard.style.border = '2px solid black';
+        const chessboard = document.getElementById('chessboard');
+        chessboard.innerHTML = ''; // Clear existing board
+        chessboard.style.display = "grid";
+        chessboard.style.gridTemplateColumns = "repeat(8, 70px)";
+        chessboard.style.gridTemplateRows = "repeat(8, 70px)";
+        chessboard.style.width = "560px";
+        chessboard.style.height = "560px";
+        chessboard.style.border = "2px solid black";
 
-        const activeBoard = boardState || createEmptyBoardArray();
+        const initialBoard = [
+            ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
+            ["pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b"],
+            [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null],
+            ["pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w", "pawn-w"],
+            ["rook-w", "knight-w", "bishop-w", "queen-w", "king-w", "bishop-w", "knight-w", "rook-w"]
+        ];
 
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
-                square.style.width = '70px';
-                square.style.height = '70px';
-                square.style.display = 'flex';
-                square.style.alignItems = 'center';
-                square.style.justifyContent = 'center';
-                square.style.position = 'relative';
-                square.style.backgroundColor = (row + col) % 2 === 0 ? '#f0d9b5' : '#b58863';
+                square.style.width = "70px";
+                square.style.height = "70px";
+                square.style.display = "flex";
+                square.style.alignItems = "center";
+                square.style.justifyContent = "center";
+                square.style.position = "relative";
+                square.style.backgroundColor = (row + col) % 2 === 0 ? "#f0d9b5" : "#b58863";
 
                 square.dataset.row = row;
                 square.dataset.col = col;
 
-                const pieceData = activeBoard[row] && activeBoard[row][col] ? { ...activeBoard[row][col] } : null;
+                let pieceData = null;
+                if (boardState && boardState[row] && boardState[row][col]) {
+                    pieceData = boardState[row][col];
+                } else if (!boardState && initialBoard[row][col]) {
+                    const [type, color] = initialBoard[row][col].split('-');
+                    pieceData = {
+                        type,
+                        color,
+                        moved: false,
+                        id: `piece${row}${col}`
+                    };
+                }
 
                 if (pieceData) {
                     const piece = document.createElement('img');
                     piece.src = `images/${pieceData.type}-${pieceData.color}.svg`;
-                    piece.style.width = '70px';
-                    piece.style.height = '70px';
+                    piece.style.width = "70px";
+                    piece.style.height = "70px";
                     piece.classList.add('piece');
                     piece.dataset.color = pieceData.color;
                     piece.dataset.type = pieceData.type;
@@ -807,28 +487,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
     }
-
-    function isStockfishEvaluationEnabled() {
-        if (botDifficulty === 'stockfish') {
-            return true;
-        }
-
-        if (botDifficulty === 'custom') {
-            const summary = getCustomMixSummary();
-            if (summary.valid) {
-                return summary.entries.some(entry => entry.id === 'stockfish');
-            }
-            return lastValidCustomMix.some(entry => entry.id === 'stockfish');
-        }
-
-        return false;
-    }
     const handleSquareClick = (event) => {
-        if (customEditorActive) {
-            handleEditorSquareClick(event.currentTarget);
-            return;
-        }
-
         if (gameOver || pendingPromotion) return;
 
         if (historyStates.length && currentHistoryIndex !== historyStates.length - 1) {
@@ -876,19 +535,6 @@ document.addEventListener("DOMContentLoaded", () => {
             showLegalMoves(piece, square);
         }
     };
-    function moveCastlingRook(row, startCol, targetCol) {
-        if (startCol === null || targetCol === null) {
-            return;
-        }
-        const rook = document.querySelector(`[data-row="${row}"][data-col="${startCol}"] .piece`);
-        const targetSquare = document.querySelector(`[data-row="${row}"][data-col="${targetCol}"]`);
-        if (!rook || !targetSquare) {
-            return;
-        }
-        targetSquare.appendChild(rook);
-        rook.dataset.moved = 'true';
-    }
-
     const movePiece = (square) => {
         const piece = selectedPiece;
         const fromRow = parseInt(piece.parentElement.dataset.row);
@@ -942,17 +588,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
         square.appendChild(piece);
 
-        if (pieceType === 'king') {
-            const config = currentCastlingConfig[piece.dataset.color];
-            if (config && fromRow === config.row) {
-                if (toCol === 6 && config.kingSide.startCol !== null) {
-                    moveCastlingRook(fromRow, config.kingSide.startCol, config.kingSide.targetCol);
-                    isCastling = 'king';
-                } else if (toCol === 2 && config.queenSide.startCol !== null) {
-                    moveCastlingRook(fromRow, config.queenSide.startCol, config.queenSide.targetCol);
-                    isCastling = 'queen';
-                }
+        if (pieceType === 'king' && Math.abs(fromCol - toCol) === 2) {
+            const rookCol = toCol === 6 ? 7 : 0;
+            const rookTargetCol = toCol === 6 ? 5 : 3;
+            const rook = document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`);
+            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
+            if (rook && rookTargetSquare) {
+                rookTargetSquare.appendChild(rook);
+                rook.dataset.moved = 'true';
             }
+            isCastling = toCol === 6 ? 'king' : 'queen';
         }
 
         piece.dataset.moved = 'true';
@@ -1056,15 +701,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 break;
             case 'king':
                 addKingMoves(moves, row, col, color);
-                if (piece.dataset.moved === 'false') {
-                    const config = currentCastlingConfig[color];
-                    if (config && col === config.kingStartCol && row === config.row) {
-                        if (canCastle(color, row, 'king')) {
-                            moves.push([row, 6]);
+                if (!JSON.parse(piece.dataset.moved)) { // Check if the king can move
+                    // Castling to the right
+                    if (canCastle(color, row, col, 1)) {
+                        moves.push([row, col + 2]); // Add the move two squares to the right
                         }
-                        if (canCastle(color, row, 'queen')) {
-                            moves.push([row, 2]);
-                        }
+                        // Castling to the left
+                    if (canCastle(color, row, col, -1)) {
+                    moves.push([row, col - 2]); // Add the move two squares to the left
                     }
                 }
                 break;
@@ -1090,737 +734,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return boardCopy;
     };
     const makeMoveOnBoardCopy = (boardCopy, piece, fromRow, fromCol, toRow, toCol) => {
-        const entry = boardCopy[fromRow][fromCol];
-        boardCopy[toRow][toCol] = entry;
+        boardCopy[toRow][toCol] = boardCopy[fromRow][fromCol];
         boardCopy[fromRow][fromCol] = null;
-
-        if (!entry) {
-            return;
-        }
-
-        if (entry.type === 'king') {
-            const color = entry.color;
-            const config = currentCastlingConfig[color];
-            if (config && fromRow === config.row && fromCol === config.kingStartCol) {
-                if (toCol === 6 && config.kingSide.startCol !== null) {
-                    boardCopy[fromRow][config.kingSide.targetCol] = boardCopy[fromRow][config.kingSide.startCol];
-                    boardCopy[fromRow][config.kingSide.startCol] = null;
-                } else if (toCol === 2 && config.queenSide.startCol !== null) {
-                    boardCopy[fromRow][config.queenSide.targetCol] = boardCopy[fromRow][config.queenSide.startCol];
-                    boardCopy[fromRow][config.queenSide.startCol] = null;
-                }
-            }
-        }
     };
 
-    function findKingOnBoard(board, color) {
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const cell = board[row][col];
-                if (cell && cell.type === 'king' && cell.color === color) {
-                    return { row, col };
-                }
-            }
-        }
-        return null;
-    }
-
-    function findRookForCastling(board, kingPos, color, side) {
-        const direction = side === 'king' ? 1 : -1;
-        let col = kingPos.col + direction;
-        while (col >= 0 && col < 8) {
-            const cell = board[kingPos.row][col];
-            if (cell) {
-                if (cell.type === 'rook' && cell.color === color) {
-                    return col;
-                }
-                break;
-            }
-            col += direction;
-        }
-        return null;
-    }
-
-    function parseCastlingRightsString(castling, board, whiteKingPos, blackKingPos) {
-        const config = buildCastlingConfig({
-            w: { row: whiteKingPos.row, kingStartCol: whiteKingPos.col, kingSide: null, queenSide: null },
-            b: { row: blackKingPos.row, kingStartCol: blackKingPos.col, kingSide: null, queenSide: null }
-        });
-
-        if (!castling || castling === '-') {
-            return config;
-        }
-
-        const processSymbol = (symbol, kingPos, colorKey) => {
-            let fileChar;
-            if (symbol === 'K' || symbol === 'k') {
-                fileChar = 'h';
-            } else if (symbol === 'Q' || symbol === 'q') {
-                fileChar = 'a';
-            } else {
-                const lower = symbol.toLowerCase();
-                if (!fileLetters.includes(lower)) {
-                    return;
-                }
-                fileChar = lower;
-            }
-            const col = fileLetters.indexOf(fileChar);
-            if (col < 0) {
-                return;
-            }
-            const rookCell = board[kingPos.row][col];
-            if (!rookCell || rookCell.type !== 'rook' || rookCell.color !== colorKey) {
-                throw new Error('Invalid FEN: castling rook not found.');
-            }
-            if (colorKey === 'w') {
-                if (col > kingPos.col) {
-                    config.w.kingSide.startCol = col;
-                } else {
-                    config.w.queenSide.startCol = col;
-                }
-            } else {
-                if (col > kingPos.col) {
-                    config.b.kingSide.startCol = col;
-                } else {
-                    config.b.queenSide.startCol = col;
-                }
-            }
-            rookCell.moved = false;
-        };
-
-        for (const char of castling) {
-            if (char === char.toUpperCase()) {
-                processSymbol(char, whiteKingPos, 'w');
-            } else {
-                processSymbol(char, blackKingPos, 'b');
-            }
-        }
-
-        const whiteKingCell = board[whiteKingPos.row][whiteKingPos.col];
-        if (whiteKingCell) {
-            whiteKingCell.moved = !(config.w.kingSide.startCol !== null || config.w.queenSide.startCol !== null);
-        }
-        const blackKingCell = board[blackKingPos.row][blackKingPos.col];
-        if (blackKingCell) {
-            blackKingCell.moved = !(config.b.kingSide.startCol !== null || config.b.queenSide.startCol !== null);
-        }
-
-        const whiteRookCols = [];
-        if (config.w.kingSide.startCol !== null) whiteRookCols.push(config.w.kingSide.startCol);
-        if (config.w.queenSide.startCol !== null) whiteRookCols.push(config.w.queenSide.startCol);
-        const blackRookCols = [];
-        if (config.b.kingSide.startCol !== null) blackRookCols.push(config.b.kingSide.startCol);
-        if (config.b.queenSide.startCol !== null) blackRookCols.push(config.b.queenSide.startCol);
-
-        for (let col = 0; col < 8; col++) {
-            const whiteCell = board[whiteKingPos.row][col];
-            if (whiteCell && whiteCell.type === 'rook' && whiteCell.color === 'w' && !whiteRookCols.includes(col)) {
-                whiteCell.moved = true;
-            }
-            const blackCell = board[blackKingPos.row][col];
-            if (blackCell && blackCell.type === 'rook' && blackCell.color === 'b' && !blackRookCols.includes(col)) {
-                blackCell.moved = true;
-            }
-        }
-
-        return config;
-    }
-
-    function createLastMoveFromEnPassant(enPassantSquare, turn) {
-        if (!enPassantSquare || enPassantSquare === '-' || enPassantSquare.length !== 2) {
-            return null;
-        }
-        const file = enPassantSquare[0];
-        const rank = parseInt(enPassantSquare[1], 10);
-        if (!fileLetters.includes(file) || Number.isNaN(rank)) {
-            return null;
-        }
-        const fileIndex = fileLetters.indexOf(file);
-        const targetRow = 8 - rank;
-        if (targetRow < 0 || targetRow > 7) {
-            return null;
-        }
-        const movingColor = turn === 'w' ? 'b' : 'w';
-        let fromRow;
-        let toRow;
-        if (movingColor === 'w') {
-            fromRow = targetRow + 1;
-            toRow = targetRow - 1;
-        } else {
-            fromRow = targetRow - 1;
-            toRow = targetRow + 1;
-        }
-        if (fromRow < 0 || fromRow > 7 || toRow < 0 || toRow > 7) {
-            return null;
-        }
-        return {
-            color: movingColor,
-            pieceType: 'pawn',
-            fromRow,
-            fromCol: fileIndex,
-            toRow,
-            toCol: fileIndex,
-            resultingPieceType: 'pawn',
-            isCapture: false,
-            capturedPieceType: null,
-            capturedPieceColor: null,
-            isEnPassant: false,
-            isCastling: null,
-            promotionType: null
-        };
-    }
-
-    function parseFENString(fen) {
-        const parts = fen.trim().split(/\s+/);
-        if (parts.length < 4) {
-            throw new Error('FEN must have at least four fields.');
-        }
-
-        const boardPart = parts[0];
-        const turnPart = parts[1];
-        const castlingPart = parts[2];
-        const enPassantPart = parts[3];
-        const fullmovePart = parts[5] ? parseInt(parts[5], 10) : 1;
-
-        const rows = boardPart.split('/');
-        if (rows.length !== 8) {
-            throw new Error('FEN board description must have 8 ranks.');
-        }
-
-        const board = createEmptyBoardArray();
-        let localCounter = pieceIdCounter;
-        const typeMap = { p: 'pawn', r: 'rook', n: 'knight', b: 'bishop', q: 'queen', k: 'king' };
-
-        for (let row = 0; row < 8; row++) {
-            const rowString = rows[row];
-            let col = 0;
-            for (let i = 0; i < rowString.length; i++) {
-                const char = rowString[i];
-                if (char >= '1' && char <= '8') {
-                    col += parseInt(char, 10);
-                    continue;
-                }
-                const lower = char.toLowerCase();
-                const type = typeMap[lower];
-                if (!type) {
-                    throw new Error('Invalid FEN: unknown piece symbol.');
-                }
-                const color = char === lower ? 'b' : 'w';
-                if (col >= 8) {
-                    throw new Error('Invalid FEN: too many squares in rank.');
-                }
-                localCounter += 1;
-                board[row][col] = { type, color, moved: false, id: `piece-${localCounter}` };
-                col += 1;
-            }
-            if (col !== 8) {
-                throw new Error('Invalid FEN: incomplete rank description.');
-            }
-        }
-
-        pieceIdCounter = localCounter;
-
-        const whiteKingPos = findKingOnBoard(board, 'w');
-        const blackKingPos = findKingOnBoard(board, 'b');
-        if (!whiteKingPos || !blackKingPos) {
-            throw new Error('FEN must include both kings.');
-        }
-
-        const castlingConfig = parseCastlingRightsString(castlingPart, board, whiteKingPos, blackKingPos);
-
-        const turn = turnPart === 'b' ? 'b' : 'w';
-        const fullmoveNumber = Number.isNaN(fullmovePart) || fullmovePart < 1 ? 1 : fullmovePart;
-        const enPassant = enPassantPart !== '-' ? enPassantPart : null;
-
-        updatePieceIdCounter(board);
-
-        return {
-            board,
-            turn,
-            fullmoveNumber,
-            castlingConfig,
-            forcedEnPassantTarget: enPassant,
-            lastMove: createLastMoveFromEnPassant(enPassantPart, turnPart)
-        };
-    }
-
-    function createEmptyEditorState() {
-        return {
-            board: createEmptyBoardArray(),
-            turn: 'w',
-            castling: {
-                whiteKingSide: false,
-                whiteQueenSide: false,
-                blackKingSide: false,
-                blackQueenSide: false
-            },
-            enPassant: '-',
-            fullmoveNumber: 1
-        };
-    }
-
-    function positionToEditorState(position) {
-        const state = createEmptyEditorState();
-        state.board = cloneBoardState(position.board);
-        state.turn = position.turn || 'w';
-        state.fullmoveNumber = position.fullmoveNumber || 1;
-        state.enPassant = position.forcedEnPassantTarget || '-';
-        state.castling.whiteKingSide = !!(position.castlingConfig && position.castlingConfig.w && position.castlingConfig.w.kingSide.startCol !== null);
-        state.castling.whiteQueenSide = !!(position.castlingConfig && position.castlingConfig.w && position.castlingConfig.w.queenSide.startCol !== null);
-        state.castling.blackKingSide = !!(position.castlingConfig && position.castlingConfig.b && position.castlingConfig.b.kingSide.startCol !== null);
-        state.castling.blackQueenSide = !!(position.castlingConfig && position.castlingConfig.b && position.castlingConfig.b.queenSide.startCol !== null);
-        return state;
-    }
-
-    function applyEditorState(state) {
-        customEditorState = {
-            board: cloneBoardState(state.board),
-            turn: state.turn || 'w',
-            castling: { ...state.castling },
-            enPassant: state.enPassant || '-',
-            fullmoveNumber: state.fullmoveNumber || 1
-        };
-
-        if (customSideToMoveSelect) {
-            customSideToMoveSelect.value = customEditorState.turn;
-        }
-        if (customFullmoveInput) {
-            customFullmoveInput.value = customEditorState.fullmoveNumber;
-        }
-        if (customEnPassantSelect) {
-            const targetValue = customEditorState.enPassant;
-            if ([...customEnPassantSelect.options].some(option => option.value === targetValue)) {
-                customEnPassantSelect.value = targetValue;
-            } else {
-                customEnPassantSelect.value = '-';
-            }
-        }
-        if (customCastleWhiteKing) customCastleWhiteKing.checked = !!customEditorState.castling.whiteKingSide;
-        if (customCastleWhiteQueen) customCastleWhiteQueen.checked = !!customEditorState.castling.whiteQueenSide;
-        if (customCastleBlackKing) customCastleBlackKing.checked = !!customEditorState.castling.blackKingSide;
-        if (customCastleBlackQueen) customCastleBlackQueen.checked = !!customEditorState.castling.blackQueenSide;
-
-        customEditorActive = true;
-        gameOver = true;
-        turn = customEditorState.turn;
-        fullmoveNumber = customEditorState.fullmoveNumber;
-        lastMove = null;
-        forcedEnPassantTarget = customEditorState.enPassant !== '-' ? customEditorState.enPassant : null;
-
-        createBoard(customEditorState.board);
-        updatePieceIdCounter(customEditorState.board);
-        moveHistoryEntries = [];
-        historyStates = [];
-        currentHistoryIndex = 0;
-        updateMoveHistoryUI();
-        resetEvalBar();
-    }
-
-    function recordEditorState() {
-        if (!customEditorState) {
-            customEditorState = createEmptyEditorState();
-        }
-        const board = createEmptyBoardArray();
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const pieceEl = document.querySelector(`[data-row="${row}"][data-col="${col}"] .piece`);
-                if (pieceEl) {
-                    board[row][col] = {
-                        type: pieceEl.dataset.type,
-                        color: pieceEl.dataset.color,
-                        moved: pieceEl.dataset.moved === 'true',
-                        id: pieceEl.id
-                    };
-                } else {
-                    board[row][col] = null;
-                }
-            }
-        }
-        customEditorState.board = board;
-        if (customSideToMoveSelect) {
-            customEditorState.turn = customSideToMoveSelect.value;
-        }
-        if (customFullmoveInput) {
-            const value = parseInt(customFullmoveInput.value, 10);
-            customEditorState.fullmoveNumber = Number.isNaN(value) || value < 1 ? 1 : value;
-        }
-        if (customEnPassantSelect) {
-            customEditorState.enPassant = customEnPassantSelect.value;
-        }
-        customEditorState.castling.whiteKingSide = customCastleWhiteKing ? customCastleWhiteKing.checked : false;
-        customEditorState.castling.whiteQueenSide = customCastleWhiteQueen ? customCastleWhiteQueen.checked : false;
-        customEditorState.castling.blackKingSide = customCastleBlackKing ? customCastleBlackKing.checked : false;
-        customEditorState.castling.blackQueenSide = customCastleBlackQueen ? customCastleBlackQueen.checked : false;
-        updatePieceIdCounter(board);
-    }
-
-    function handleEditorSquareClick(square) {
-        if (!square) {
-            return;
-        }
-        const existingPiece = square.querySelector('.piece');
-        if (!editorSelectedTool || !editorSelectedTool.type) {
-            if (existingPiece) {
-                existingPiece.remove();
-                recordEditorState();
-            }
-            return;
-        }
-        if (existingPiece) {
-            existingPiece.remove();
-        }
-        const piece = document.createElement('img');
-        piece.src = `images/${editorSelectedTool.type}-${editorSelectedTool.color}.svg`;
-        piece.style.width = '70px';
-        piece.style.height = '70px';
-        piece.classList.add('piece');
-        piece.dataset.type = editorSelectedTool.type;
-        piece.dataset.color = editorSelectedTool.color;
-        piece.dataset.moved = 'false';
-        piece.id = generatePieceId();
-        square.appendChild(piece);
-        recordEditorState();
-    }
-
-    function renderEditorPalette() {
-        if (!customPiecePalette) {
-            return;
-        }
-        editorPaletteButtons.length = 0;
-        customPiecePalette.innerHTML = '';
-        editorPieces.forEach(piece => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'custom-piece-button';
-            button.title = piece.label;
-            const img = document.createElement('img');
-            img.src = `images/${piece.type}-${piece.color}.svg`;
-            img.alt = piece.label;
-            button.appendChild(img);
-            button.addEventListener('click', () => setEditorTool(piece));
-            customPiecePalette.appendChild(button);
-            editorPaletteButtons.push({ button, piece });
-        });
-
-        const eraserButton = document.createElement('button');
-        eraserButton.type = 'button';
-        eraserButton.className = 'custom-piece-button';
-        eraserButton.textContent = 'Erase';
-        eraserButton.addEventListener('click', () => setEditorTool(null));
-        customPiecePalette.appendChild(eraserButton);
-        editorPaletteButtons.push({ button: eraserButton, piece: null });
-
-        const defaultTool = editorPieces.find(p => p.type === 'pawn' && p.color === 'w') || editorPieces[0] || null;
-        setEditorTool(defaultTool);
-    }
-
-    function setEditorTool(piece) {
-        if (piece && piece.type && piece.color) {
-            editorSelectedTool = { type: piece.type, color: piece.color };
-        } else {
-            editorSelectedTool = { type: null, color: null };
-        }
-        updatePaletteSelection();
-    }
-
-    function updatePaletteSelection() {
-        editorPaletteButtons.forEach(entry => {
-            if (!entry || !entry.button) {
-                return;
-            }
-            const isSelected = entry.piece
-                ? editorSelectedTool.type === entry.piece.type && editorSelectedTool.color === entry.piece.color
-                : !editorSelectedTool.type;
-            if (isSelected) {
-                entry.button.classList.add('selected');
-            } else {
-                entry.button.classList.remove('selected');
-            }
-        });
-    }
-
-    function populateEnPassantSelect() {
-        if (!customEnPassantSelect) {
-            return;
-        }
-        customEnPassantSelect.innerHTML = '';
-        const noneOption = document.createElement('option');
-        noneOption.value = '-';
-        noneOption.textContent = 'None';
-        customEnPassantSelect.appendChild(noneOption);
-        for (const file of fileLetters) {
-            for (const rank of [3, 6]) {
-                const option = document.createElement('option');
-                option.value = `${file}${rank}`;
-                option.textContent = `${file}${rank}`;
-                customEnPassantSelect.appendChild(option);
-            }
-        }
-    }
-
-    function buildPositionFromEditorState(state) {
-        const board = cloneBoardState(state.board);
-        let whiteKings = 0;
-        let blackKings = 0;
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const cell = board[row][col];
-                if (cell && cell.type === 'king') {
-                    if (cell.color === 'w') {
-                        whiteKings += 1;
-                    } else if (cell.color === 'b') {
-                        blackKings += 1;
-                    }
-                }
-            }
-        }
-        if (whiteKings !== 1 || blackKings !== 1) {
-            throw new Error('Exactly one white king and one black king are required.');
-        }
-        const whiteKingPos = findKingOnBoard(board, 'w');
-        const blackKingPos = findKingOnBoard(board, 'b');
-        if (!whiteKingPos || !blackKingPos) {
-            throw new Error('Both kings must be present.');
-        }
-
-        const castlingConfig = buildCastlingConfig({
-            w: { row: whiteKingPos.row, kingStartCol: whiteKingPos.col, kingSide: null, queenSide: null },
-            b: { row: blackKingPos.row, kingStartCol: blackKingPos.col, kingSide: null, queenSide: null }
-        });
-
-        if (state.castling.whiteKingSide) {
-            const rookCol = findRookForCastling(board, { row: whiteKingPos.row, col: whiteKingPos.col }, 'w', 'king');
-            if (rookCol === null) {
-                throw new Error('White kingside castling selected but no rook found.');
-            }
-            castlingConfig.w.kingSide.startCol = rookCol;
-        }
-        if (state.castling.whiteQueenSide) {
-            const rookCol = findRookForCastling(board, { row: whiteKingPos.row, col: whiteKingPos.col }, 'w', 'queen');
-            if (rookCol === null) {
-                throw new Error('White queenside castling selected but no rook found.');
-            }
-            castlingConfig.w.queenSide.startCol = rookCol;
-        }
-        if (state.castling.blackKingSide) {
-            const rookCol = findRookForCastling(board, { row: blackKingPos.row, col: blackKingPos.col }, 'b', 'king');
-            if (rookCol === null) {
-                throw new Error('Black kingside castling selected but no rook found.');
-            }
-            castlingConfig.b.kingSide.startCol = rookCol;
-        }
-        if (state.castling.blackQueenSide) {
-            const rookCol = findRookForCastling(board, { row: blackKingPos.row, col: blackKingPos.col }, 'b', 'queen');
-            if (rookCol === null) {
-                throw new Error('Black queenside castling selected but no rook found.');
-            }
-            castlingConfig.b.queenSide.startCol = rookCol;
-        }
-
-        const whiteKingCell = board[whiteKingPos.row][whiteKingPos.col];
-        if (whiteKingCell) {
-            whiteKingCell.moved = !(state.castling.whiteKingSide || state.castling.whiteQueenSide);
-        }
-        const blackKingCell = board[blackKingPos.row][blackKingPos.col];
-        if (blackKingCell) {
-            blackKingCell.moved = !(state.castling.blackKingSide || state.castling.blackQueenSide);
-        }
-
-        const whiteRightsCols = [];
-        if (castlingConfig.w.kingSide.startCol !== null) whiteRightsCols.push(castlingConfig.w.kingSide.startCol);
-        if (castlingConfig.w.queenSide.startCol !== null) whiteRightsCols.push(castlingConfig.w.queenSide.startCol);
-        const blackRightsCols = [];
-        if (castlingConfig.b.kingSide.startCol !== null) blackRightsCols.push(castlingConfig.b.kingSide.startCol);
-        if (castlingConfig.b.queenSide.startCol !== null) blackRightsCols.push(castlingConfig.b.queenSide.startCol);
-
-        for (let col = 0; col < 8; col++) {
-            const whiteCell = board[whiteKingPos.row][col];
-            if (whiteCell && whiteCell.type === 'rook' && whiteCell.color === 'w') {
-                whiteCell.moved = !whiteRightsCols.includes(col);
-            }
-            const blackCell = board[blackKingPos.row][col];
-            if (blackCell && blackCell.type === 'rook' && blackCell.color === 'b') {
-                blackCell.moved = !blackRightsCols.includes(col);
-            }
-        }
-
-        updatePieceIdCounter(board);
-
-        const enPassantTarget = state.enPassant && state.enPassant !== '-' ? state.enPassant : null;
-
-        return {
-            board,
-            turn: state.turn || 'w',
-            fullmoveNumber: state.fullmoveNumber || 1,
-            castlingConfig,
-            forcedEnPassantTarget: enPassantTarget,
-            lastMove: createLastMoveFromEnPassant(state.enPassant, state.turn || 'w')
-        };
-    }
-
-    function applyCustomSetup() {
-        try {
-            recordEditorState();
-            const position = buildPositionFromEditorState(customEditorState);
-            customStartingPosition = clonePosition(position);
-            customEditorState = positionToEditorState(position);
-            setCustomSetupMessage('Custom position applied. Starting game...', { isSuccess: true });
-            setCustomFenStatus('');
-            resetGame(position);
-        } catch (error) {
-            setCustomSetupMessage(error.message || 'Unable to apply custom setup.');
-        }
-    }
-
-    function loadPositionFromFen() {
-        if (!customFenInput) {
-            return;
-        }
-        const fen = customFenInput.value.trim();
-        if (!fen) {
-            setCustomFenStatus('Please enter a FEN string.', true);
-            return;
-        }
-        try {
-            const position = parseFENString(fen);
-            const state = positionToEditorState(position);
-            applyEditorState(state);
-            setCustomFenStatus('FEN loaded successfully.', false);
-            setCustomSetupMessage('');
-        } catch (error) {
-            setCustomFenStatus(error.message || 'Invalid FEN string.', true);
-        }
-    }
-
-    function enterCustomSetupMode() {
-        updateCustomSetupVisibility();
-        if (!customEditorState) {
-            customEditorState = createEmptyEditorState();
-        }
-        applyEditorState(customEditorState);
-        setCustomSetupMessage('');
-        setCustomFenStatus('');
-    }
-
-    function exitCustomSetupMode() {
-        if (!customEditorActive) {
-            return;
-        }
-        customEditorActive = false;
-    }
-
-    function initializeCustomSetupUI() {
-        populateEnPassantSelect();
-        renderEditorPalette();
-        customEditorState = createEmptyEditorState();
-
-        if (customSideToMoveSelect) {
-            customSideToMoveSelect.addEventListener('change', () => {
-                if (customEditorState) {
-                    customEditorState.turn = customSideToMoveSelect.value;
-                }
-            });
-        }
-        if (customFullmoveInput) {
-            customFullmoveInput.addEventListener('input', () => {
-                if (customEditorState) {
-                    const value = parseInt(customFullmoveInput.value, 10);
-                    customEditorState.fullmoveNumber = Number.isNaN(value) || value < 1 ? 1 : value;
-                }
-            });
-        }
-        if (customEnPassantSelect) {
-            customEnPassantSelect.addEventListener('change', () => {
-                if (customEditorState) {
-                    customEditorState.enPassant = customEnPassantSelect.value;
-                }
-            });
-        }
-        [customCastleWhiteKing, customCastleWhiteQueen, customCastleBlackKing, customCastleBlackQueen].forEach((checkbox, index) => {
-            if (!checkbox) {
-                return;
-            }
-            checkbox.addEventListener('change', () => {
-                if (!customEditorState) {
-                    return;
-                }
-                switch (index) {
-                    case 0:
-                        customEditorState.castling.whiteKingSide = checkbox.checked;
-                        break;
-                    case 1:
-                        customEditorState.castling.whiteQueenSide = checkbox.checked;
-                        break;
-                    case 2:
-                        customEditorState.castling.blackKingSide = checkbox.checked;
-                        break;
-                    case 3:
-                        customEditorState.castling.blackQueenSide = checkbox.checked;
-                        break;
-                    default:
-                        break;
-                }
-            });
-        });
-
-        if (clearCustomBoardButton) {
-            clearCustomBoardButton.addEventListener('click', () => {
-                customEditorState = createEmptyEditorState();
-                applyEditorState(customEditorState);
-                setCustomSetupMessage('');
-                setCustomFenStatus('');
-            });
-        }
-        if (resetCustomBoardButton) {
-            resetCustomBoardButton.addEventListener('click', () => {
-                const standardPosition = createStandardPosition();
-                customEditorState = positionToEditorState(standardPosition);
-                applyEditorState(customEditorState);
-                setCustomSetupMessage('');
-                setCustomFenStatus('');
-            });
-        }
-        if (enterCustomEditorButton) {
-            enterCustomEditorButton.addEventListener('click', () => {
-                gameType = 'custom';
-                if (gameTypeSelect && gameTypeSelect.value !== 'custom') {
-                    gameTypeSelect.value = 'custom';
-                }
-                enterCustomSetupMode();
-            });
-        }
-        if (applyCustomSetupButton) {
-            applyCustomSetupButton.addEventListener('click', () => applyCustomSetup());
-        }
-        if (loadFenButton) {
-            loadFenButton.addEventListener('click', () => loadPositionFromFen());
-        }
-
-        updateCustomSetupVisibility();
-    }
-
-    function updateEngineChess960Option() {
-        if (engine && typeof engine.postMessage === 'function') {
-            const value = gameType === 'standard' ? 0 : 1;
-            engine.postMessage(`setoption name UCI_Chess960 value ${value}`);
-        }
-    }
-
     const initStockfish = () => {
-        const support = getStockfishSupportStatus();
-        if (!support.available) {
-            setStockfishAvailability(false, support.message);
-            return;
-        }
-
-        try {
-            engine = new Worker('stockfish.js');
-        } catch (error) {
-            console.error('Failed to initialize the Stockfish worker.', error);
-            setStockfishAvailability(false, 'Stockfish could not be started in this browser.');
-            return;
-        }
-
+        engine = new Worker('stockfish.js');
         engine.onmessage = (e) => {
             const line = e.data;
             const scoreMatch = line.match(/score (cp|mate) (-?\\d+)/);
@@ -1838,14 +757,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 engine.bestMoveCallback = null;
             }
         };
-
-        engine.onerror = (event) => {
-            console.error('Stockfish worker error:', event && event.message ? event.message : event);
-            setStockfishAvailability(false, 'Stockfish encountered an error and has been disabled.');
-        };
-
-        setStockfishAvailability(true);
-        updateEngineChess960Option();
     };
 
     const requestStockfish = (callback) => {
@@ -1859,14 +770,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const performStockfishBotMove = () => {
-        if (!engine || stockfishAvailable === false) {
-            if (stockfishUnavailableMessage) {
-                updateStockfishStatus(stockfishUnavailableMessage, { type: 'error' });
-            }
-            performRandomBotMove();
-            return;
-        }
-
         requestStockfish(best => {
             if (!best) return;
             const fromFile = best[0];
@@ -1916,6 +819,10 @@ document.addEventListener("DOMContentLoaded", () => {
         rook: 500,
         queen: 900,
         king: 20000
+    };
+
+    const cloneBoardState = (board) => {
+        return board.map(row => row.map(cell => (cell ? { ...cell } : null)));
     };
 
     const applyMoveForEvaluation = (board, fromRow, fromCol, toRow, toCol, pieceData) => {
@@ -2104,17 +1011,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
         toSquare.appendChild(piece);
 
-        if (pieceType === 'king') {
-            const config = currentCastlingConfig[color];
-            if (config && fromRow === config.row) {
-                if (toCol === 6 && config.kingSide.startCol !== null) {
-                    moveCastlingRook(fromRow, config.kingSide.startCol, config.kingSide.targetCol);
-                    isCastling = 'king';
-                } else if (toCol === 2 && config.queenSide.startCol !== null) {
-                    moveCastlingRook(fromRow, config.queenSide.startCol, config.queenSide.targetCol);
-                    isCastling = 'queen';
-                }
+        if (pieceType === 'king' && Math.abs(fromCol - toCol) === 2) {
+            const rookCol = toCol === 6 ? 7 : 0;
+            const rookTargetCol = toCol === 6 ? 5 : 3;
+            const rook = document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`);
+            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
+            if (rook && rookTargetSquare) {
+                rookTargetSquare.appendChild(rook);
+                rook.dataset.moved = 'true';
             }
+            isCastling = toCol === 6 ? 'king' : 'queen';
         }
 
         piece.dataset.moved = 'true';
@@ -2347,7 +1253,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const finalizeMove = (moveDetails) => {
         pendingPromotion = null;
-        forcedEnPassantTarget = null;
         lastMove = {
             color: moveDetails.color,
             fromRow: moveDetails.fromRow,
@@ -2453,9 +1358,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getEnPassantSquare = () => {
-        if (forcedEnPassantTarget) {
-            return forcedEnPassantTarget;
-        }
         if (!lastMove || lastMove.pieceType !== 'pawn') return '-';
         if (Math.abs(lastMove.fromRow - lastMove.toRow) !== 2) return '-';
         const file = fileLetters[lastMove.fromCol];
@@ -2581,74 +1483,6 @@ document.addEventListener("DOMContentLoaded", () => {
         requestStockfish();
     };
 
-    function getStockfishSupportStatus() {
-        if (typeof Worker === 'undefined') {
-            return {
-                available: false,
-                message: 'Stockfish requires Web Worker support, which is not available in this browser.'
-            };
-        }
-
-        if (typeof SharedArrayBuffer === 'undefined' || typeof Atomics === 'undefined') {
-            return {
-                available: false,
-                message: 'Stockfish requires SharedArrayBuffer support. Serve this page with Cross-Origin isolation headers (COOP and COEP) or use a compatible browser.'
-            };
-        }
-
-        return { available: true, message: '' };
-    }
-
-    const setStockfishAvailability = (available, message = '') => {
-        stockfishAvailable = available;
-        stockfishUnavailableMessage = available ? '' : (message || 'The Stockfish engine is not available in this browser.');
-
-        if (available === false && engine) {
-            if (engine.bestMoveCallback) {
-                engine.bestMoveCallback = null;
-            }
-            try {
-                engine.terminate();
-            } catch (err) {
-                console.warn('Failed to terminate Stockfish worker.', err);
-            }
-            engine = null;
-        }
-
-        const stockfishOption = botDifficultySelect ? botDifficultySelect.querySelector('option[value="stockfish"]') : null;
-        if (stockfishOption) {
-            stockfishOption.disabled = available === false;
-        }
-
-        const stockfishControls = customMixControls.get('stockfish');
-        if (stockfishControls) {
-            stockfishControls.checkbox.disabled = available === false;
-            if (available === false) {
-                if (customMixState.stockfish && customMixState.stockfish.selected) {
-                    setCustomMixSelected('stockfish', false);
-                }
-                stockfishControls.slider.disabled = true;
-                stockfishControls.number.disabled = true;
-            } else {
-                stockfishControls.slider.disabled = !customMixState.stockfish.selected;
-                stockfishControls.number.disabled = !customMixState.stockfish.selected;
-            }
-        }
-
-        if (available === false) {
-            if (botDifficulty === 'stockfish' && botDifficultySelect) {
-                botDifficulty = 'random';
-                botDifficultySelect.value = 'random';
-            }
-            removeStockfishFromLastValidMix();
-            updateStockfishStatus(stockfishUnavailableMessage, { type: 'error' });
-            updateCustomMixVisibility();
-            evaluateBoard();
-        } else if (available === true) {
-            updateStockfishStatus('');
-        }
-    };
-
     const filterMoves = (moves) => {
         return moves.filter(([r, c]) => r >= 0 && r < 8 && c >= 0 && c < 8);
     };
@@ -2722,96 +1556,34 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     };
-    const canCastle = (color, row, side) => {
-        const config = currentCastlingConfig[color];
-        if (!config) {
+    const canCastle = (color, row, col, direction) => {
+        const rookCol = direction === 1 ? 7 : 0; // Right rook or left rook
+        const step = direction === 1 ? 1 : -1;
+        let emptyCheckCol = col + step;
+
+        // Check if the rook has moved or does not exist
+        const rook = document.querySelector(`[data-row="${row}"][data-col="${rookCol}"] .piece`);
+        if (!rook || rook.dataset.type !== 'rook' || JSON.parse(rook.dataset.moved)) {
             return false;
         }
 
-        const sideConfig = side === 'king' ? config.kingSide : config.queenSide;
-        if (!sideConfig || sideConfig.startCol === null) {
-            return false;
-        }
-
-        if (row !== config.row) {
-            return false;
-        }
-
-        const kingSquare = document.querySelector(`[data-row="${row}"][data-col="${config.kingStartCol}"] .piece`);
-        if (!kingSquare || kingSquare.dataset.moved === 'true') {
-            return false;
-        }
-
-        const rookSquare = document.querySelector(`[data-row="${row}"][data-col="${sideConfig.startCol}"] .piece`);
-        if (!rookSquare || rookSquare.dataset.type !== 'rook' || rookSquare.dataset.color !== color || rookSquare.dataset.moved === 'true') {
-            return false;
-        }
-
-        const minCol = Math.min(config.kingStartCol, sideConfig.startCol) + 1;
-        const maxCol = Math.max(config.kingStartCol, sideConfig.startCol) - 1;
-        for (let c = minCol; c <= maxCol; c++) {
-            if (document.querySelector(`[data-row="${row}"][data-col="${c}"] .piece`)) {
+        // Check if all squares between the king and rook are empty
+        while (emptyCheckCol !== rookCol) {
+            if (document.querySelector(`[data-row="${row}"][data-col="${emptyCheckCol}"] .piece`)) {
                 return false;
             }
+            emptyCheckCol += step;
         }
 
-        const rookTargetCol = sideConfig.targetCol;
-        const rookStep = rookTargetCol > sideConfig.startCol ? 1 : -1;
-        for (let c = sideConfig.startCol + rookStep; c !== rookTargetCol; c += rookStep) {
-            if (c === config.kingStartCol) {
-                continue;
-            }
-            if (document.querySelector(`[data-row="${row}"][data-col="${c}"] .piece`)) {
-                return false;
+        // Check if the king is in check, or if it moves through check
+        for (let i = 0; i <= 2; i++) {
+            let tempCol = col + (i * step);
+            if (isSquareAttacked(createBoardCopy(), row, tempCol, color)) {
+                return false; // King cannot move through or into check
             }
         }
 
-        const baseBoard = createBoardCopy();
-        if (isSquareAttacked(baseBoard, row, config.kingStartCol, color)) {
-            return false;
-        }
-
-        const boardCopy = createBoardCopy();
-        const kingPiece = boardCopy[row][config.kingStartCol];
-        const rookPiece = boardCopy[row][sideConfig.startCol];
-        if (!kingPiece || !rookPiece) {
-            return false;
-        }
-
-        boardCopy[row][config.kingStartCol] = null;
-        boardCopy[row][sideConfig.startCol] = null;
-        boardCopy[row][sideConfig.targetCol] = { ...rookPiece };
-
-        const kingTargetCol = side === 'king' ? 6 : 2;
-        const pathCols = [];
-        if (config.kingStartCol === kingTargetCol) {
-            pathCols.push(kingTargetCol);
-        } else {
-            const step = kingTargetCol > config.kingStartCol ? 1 : -1;
-            for (let c = config.kingStartCol + step; step > 0 ? c <= kingTargetCol : c >= kingTargetCol; c += step) {
-                pathCols.push(c);
-            }
-        }
-
-        for (const col of pathCols) {
-            if (boardCopy[row][col] && col !== kingTargetCol) {
-                return false;
-            }
-            boardCopy[row][col] = { ...kingPiece };
-            if (isSquareAttacked(boardCopy, row, col, color)) {
-                return false;
-            }
-            if (col !== kingTargetCol) {
-                boardCopy[row][col] = null;
-            }
-        }
-
-        boardCopy[row][kingTargetCol] = { ...kingPiece };
-        if (isSquareAttacked(boardCopy, row, kingTargetCol, color)) {
-            return false;
-        }
-
-        return true;
+        return true; // Castling is allowed
     };
     const clearCheckHighlights = () => {
         document.querySelectorAll('.check').forEach(square => square.classList.remove('check'));
@@ -2934,10 +1706,10 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCustomMixOptions();
     initializeCustomMixDefaults();
     updateCustomMixVisibility();
-    initializeCustomSetupUI();
-    updateCustomSetupVisibility();
 
-    resetGame();
+    createBoard();
+    historyStates.push(captureDetailedState());
+    updateMoveHistoryUI();
     initStockfish();
     evaluateBoard();
     toggleBotSelection();
