@@ -15,16 +15,30 @@ body {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
     margin-bottom: 20px;
 }
 
 .settings-container label {
-    margin-right: 10px;
+    margin-right: 0;
 }
 
 .settings-container select {
     padding: 5px;
     font-size: 16px;
+}
+
+.settings-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-group label {
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 #chessboard {
@@ -348,4 +362,192 @@ body {
     min-height: 18px;
     font-size: 13px;
     color: #c0392b;
+}
+
+.custom-setup {
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto 20px;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.custom-setup-description {
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #444;
+}
+
+.custom-setup-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.custom-editor-panel {
+    flex: 1 1 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.custom-editor-section {
+    background: #f9f9f9;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.custom-section-title {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.custom-piece-palette {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 8px;
+}
+
+.custom-piece-button {
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    background: #ffffff;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.custom-piece-button img {
+    width: 32px;
+    height: 32px;
+    pointer-events: none;
+}
+
+.custom-piece-button.selected {
+    border-color: #4caf50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.25);
+}
+
+.custom-editor-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.custom-editor-buttons button,
+.custom-editor-actions button,
+.custom-fen-buttons button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #4caf50;
+    background: #4caf50;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.custom-editor-buttons button.secondary,
+.custom-editor-actions button.secondary,
+.custom-fen-buttons button.secondary {
+    border-color: #777;
+    background: #777;
+}
+
+.custom-editor-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.custom-setting-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 14px;
+}
+
+.custom-castling {
+    align-items: flex-start;
+}
+
+.custom-castling label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+
+.custom-setting-row select,
+.custom-setting-row input[type="number"] {
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+.custom-fen-panel {
+    flex: 1 1 260px;
+    background: #f9f9f9;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 240px;
+}
+
+.custom-fen-input {
+    width: 100%;
+    min-height: 140px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    padding: 10px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    resize: vertical;
+}
+
+.custom-fen-buttons {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.custom-fen-status {
+    font-size: 13px;
+    min-height: 18px;
+    color: #2e7d32;
+}
+
+.custom-setup-error {
+    font-size: 13px;
+    color: #c0392b;
+    min-height: 18px;
+}
+
+#chessboard.editor-active {
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.35);
+}
+
+@media (max-width: 900px) {
+    .custom-setup {
+        padding: 12px;
+    }
+
+    .custom-fen-panel,
+    .custom-editor-panel {
+        flex: 1 1 100%;
+    }
 }
