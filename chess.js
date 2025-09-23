@@ -1851,10 +1851,6 @@ document.addEventListener("DOMContentLoaded", () => {
         king: 20000
     };
 
-    const cloneBoardState = (board) => {
-        return board.map(row => row.map(cell => (cell ? { ...cell } : null)));
-    };
-
     const applyMoveForEvaluation = (board, fromRow, fromCol, toRow, toCol, pieceData) => {
         const movingPiece = { ...pieceData };
         board[fromRow][fromCol] = null;
