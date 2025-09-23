@@ -8,11 +8,22 @@
 </head>
 <body>
     <div class="settings-container">
-        <label for="gameModeSelect">Game Mode:</label>
-        <select id="gameModeSelect" onchange="toggleBotSelection()">
-            <option value="twoPlayer">Two Players</option>
-            <option value="onePlayer">One Player (vs. Bot)</option>
-        </select>
+        <div class="settings-group">
+            <label for="gameModeSelect">Game Mode:</label>
+            <select id="gameModeSelect" onchange="toggleBotSelection()">
+                <option value="twoPlayer">Two Players</option>
+                <option value="onePlayer">One Player (vs. Bot)</option>
+            </select>
+        </div>
+        <div class="settings-group">
+            <label for="gameTypeSelect">Game Type:</label>
+            <select id="gameTypeSelect">
+                <option value="standard">Standard</option>
+                <option value="chess960">Chess 960</option>
+                <option value="custom">Custom Setup</option>
+            </select>
+            <button id="editCustomSetupButton" type="button" class="custom-setup-button" style="display: none;">Edit Setup</button>
+        </div>
     </div>
 
     <div id="botSelection" style="display: none;">
@@ -28,6 +39,60 @@
             <div id="customMixOptions" class="custom-mix-options"></div>
             <div id="customMixSummary" class="custom-mix-summary">Total: 0%</div>
             <div id="customMixError" class="custom-mix-error"></div>
+        </div>
+    </div>
+    <div id="customSetupModal" class="custom-setup-modal hidden">
+        <div class="custom-setup-dialog">
+            <div class="custom-setup-header">
+                <h2>Custom Setup</h2>
+                <button type="button" id="closeCustomSetup" class="close-modal-button" aria-label="Close custom setup">&times;</button>
+            </div>
+            <div class="custom-setup-body">
+                <div class="custom-setup-board-wrapper">
+                    <div id="customSetupBoard" class="custom-setup-board"></div>
+                </div>
+                <div class="custom-setup-sidebar">
+                    <div class="custom-setup-section">
+                        <h3>Pieces</h3>
+                        <div id="customPiecePalette" class="custom-piece-palette"></div>
+                    </div>
+                    <div class="custom-setup-section">
+                        <h3>Options</h3>
+                        <div class="custom-option-group">
+                            <span>Side to move:</span>
+                            <label><input type="radio" name="customSetupTurn" value="w" checked> White</label>
+                            <label><input type="radio" name="customSetupTurn" value="b"> Black</label>
+                        </div>
+                        <div class="custom-option-group castling-options">
+                            <span>Castling rights:</span>
+                            <label><input type="checkbox" id="customCastlingWhiteK"> White O-O</label>
+                            <label><input type="checkbox" id="customCastlingWhiteQ"> White O-O-O</label>
+                            <label><input type="checkbox" id="customCastlingBlackK"> Black O-O</label>
+                            <label><input type="checkbox" id="customCastlingBlackQ"> Black O-O-O</label>
+                        </div>
+                        <label for="customEnPassant">En passant target:</label>
+                        <input id="customEnPassant" type="text" maxlength="2" placeholder="- or e3">
+                        <label for="customFullmove">Fullmove number:</label>
+                        <input id="customFullmove" type="number" min="1" value="1">
+                        <div class="custom-editor-buttons">
+                            <button type="button" id="clearCustomBoard" class="secondary">Clear board</button>
+                            <button type="button" id="fillStandardBoard">Standard position</button>
+                        </div>
+                    </div>
+                    <div class="custom-setup-section">
+                        <h3>Load FEN</h3>
+                        <textarea id="customFenInput" placeholder="Paste a FEN string"></textarea>
+                        <button type="button" id="loadFenButton">Load FEN</button>
+                    </div>
+                </div>
+            </div>
+            <div class="custom-setup-footer">
+                <div id="customSetupError" class="custom-setup-error"></div>
+                <div class="custom-setup-actions">
+                    <button type="button" id="cancelCustomSetup" class="secondary">Cancel</button>
+                    <button type="button" id="applyCustomSetup" class="primary-action">Apply Setup</button>
+                </div>
+            </div>
         </div>
     </div>
     <div id="boardArea">
