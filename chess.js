@@ -3,6 +3,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const gameModeSelect = document.getElementById('gameModeSelect');
     const botSelection = document.getElementById('botSelection');
     const botDifficultySelect = document.getElementById('botDifficulty');
+    const customMixContainer = document.getElementById('customMixContainer');
+    const customMixOptions = document.getElementById('customMixOptions');
+    const customMixSummary = document.getElementById('customMixSummary');
+    const customMixError = document.getElementById('customMixError');
+
+    const botOptions = [
+        { id: 'random', label: 'Random Moves' },
+        { id: 'stockfish', label: 'Stockfish' }
+    ];
+
+    const customMixState = botOptions.reduce((acc, bot) => {
+        acc[bot.id] = { selected: false, weight: 0 };
+        return acc;
+    }, {});
+    const customMixControls = new Map();
+    let lastValidCustomMix = [];
+    let isUpdatingCustomMixInternally = false;
 
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
@@ -28,12 +45,341 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             botSelection.style.display = "none"; // Hide dropdown in two-player mode
         }
+        updateCustomMixVisibility();
         resetGame(); // Reset the game when switching modes
     });
 
     botDifficultySelect.addEventListener('change', () => {
         botDifficulty = botDifficultySelect.value;
+        updateCustomMixVisibility();
+        evaluateBoard();
     });
+
+    function getSelectedCustomMixCount() {
+        return botOptions.reduce((count, bot) => {
+            const state = customMixState[bot.id];
+            return count + (state && state.selected ? 1 : 0);
+        }, 0);
+    }
+
+    function updateCustomMixError(message) {
+        if (!customMixError) {
+            return;
+        }
+        customMixError.textContent = message;
+    }
+
+    function updateCustomMixSummaryDisplay(total) {
+        if (!customMixSummary) {
+            return;
+        }
+        const roundedTotal = Number.isFinite(total) ? total : 0;
+        customMixSummary.textContent = `Total: ${roundedTotal}%`;
+    }
+
+    function getCustomMixSummary() {
+        const summary = {
+            entries: [],
+            totalWeight: 0,
+            selectedCount: 0,
+            valid: false
+        };
+
+        botOptions.forEach(bot => {
+            const state = customMixState[bot.id];
+            if (!state) {
+                return;
+            }
+            if (state.selected) {
+                summary.selectedCount += 1;
+                summary.totalWeight += state.weight;
+                if (state.weight > 0) {
+                    summary.entries.push({ id: bot.id, weight: state.weight });
+                }
+            }
+        });
+
+        summary.valid = summary.selectedCount >= 2 && summary.totalWeight === 100 && summary.entries.length > 0;
+        return summary;
+    }
+
+    function handleCustomMixChange() {
+        const summary = getCustomMixSummary();
+        updateCustomMixSummaryDisplay(summary.totalWeight);
+
+        let message = '';
+        if (summary.selectedCount < 2) {
+            message = 'Select at least two bots for the mix.';
+        } else if (summary.totalWeight !== 100) {
+            message = `Total must equal 100% (current: ${summary.totalWeight}%).`;
+        } else if (summary.entries.length === 0) {
+            message = 'Assign a positive percentage to at least one bot.';
+        } else {
+            lastValidCustomMix = summary.entries.map(entry => ({ ...entry }));
+        }
+
+        updateCustomMixError(message);
+    }
+
+    function setCustomMixWeight(botId, weight, options = {}) {
+        const { skipComplement = false, skipChangeHandler = false } = options;
+        const controls = customMixControls.get(botId);
+        const state = customMixState[botId];
+        if (!controls || !state) {
+            return;
+        }
+
+        const rounded = Math.round(weight / 5) * 5;
+        const clamped = Math.max(0, Math.min(100, rounded));
+        state.weight = clamped;
+
+        isUpdatingCustomMixInternally = true;
+        controls.slider.value = String(clamped);
+        controls.number.value = String(clamped);
+        isUpdatingCustomMixInternally = false;
+
+        if (!skipComplement) {
+            adjustComplementIfNeeded(botId);
+        }
+
+        if (!skipChangeHandler) {
+            handleCustomMixChange();
+        }
+    }
+
+    function adjustComplementIfNeeded(botId) {
+        const selectedBots = botOptions.filter(bot => {
+            const state = customMixState[bot.id];
+            return state && state.selected;
+        });
+
+        if (selectedBots.length !== 2) {
+            return;
+        }
+
+        const otherBot = selectedBots.find(bot => bot.id !== botId);
+        if (!otherBot) {
+            return;
+        }
+
+        const targetWeight = Math.max(0, 100 - customMixState[botId].weight);
+        setCustomMixWeight(otherBot.id, targetWeight, { skipComplement: true, skipChangeHandler: true });
+    }
+
+    function setCustomMixSelected(botId, selected, options = {}) {
+        const { skipChangeHandler = false } = options;
+        const controls = customMixControls.get(botId);
+        const state = customMixState[botId];
+        if (!controls || !state) {
+            return;
+        }
+
+        state.selected = selected;
+
+        isUpdatingCustomMixInternally = true;
+        controls.checkbox.checked = selected;
+        controls.slider.disabled = !selected;
+        controls.number.disabled = !selected;
+        controls.slider.value = String(state.weight);
+        controls.number.value = String(state.weight);
+        isUpdatingCustomMixInternally = false;
+
+        if (!selected) {
+            setCustomMixWeight(botId, 0, { skipComplement: true, skipChangeHandler: true });
+        }
+
+        if (!skipChangeHandler) {
+            handleCustomMixChange();
+        }
+    }
+
+    function renderCustomMixOptions() {
+        if (!customMixOptions) {
+            return;
+        }
+
+        customMixOptions.innerHTML = '';
+        customMixControls.clear();
+
+        botOptions.forEach(bot => {
+            const row = document.createElement('div');
+            row.className = 'custom-mix-row';
+
+            const header = document.createElement('div');
+            header.className = 'custom-mix-row-header';
+
+            const label = document.createElement('label');
+            label.className = 'custom-mix-label';
+            label.setAttribute('for', `custom-mix-${bot.id}`);
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `custom-mix-${bot.id}`;
+            checkbox.className = 'custom-mix-checkbox';
+
+            const labelText = document.createElement('span');
+            labelText.textContent = bot.label;
+
+            label.appendChild(checkbox);
+            label.appendChild(labelText);
+            header.appendChild(label);
+
+            const controlsWrapper = document.createElement('div');
+            controlsWrapper.className = 'custom-mix-controls';
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = '0';
+            slider.max = '100';
+            slider.step = '5';
+            slider.value = '0';
+            slider.disabled = true;
+
+            const numberWrapper = document.createElement('div');
+            numberWrapper.className = 'custom-mix-number';
+
+            const number = document.createElement('input');
+            number.type = 'number';
+            number.min = '0';
+            number.max = '100';
+            number.step = '5';
+            number.value = '0';
+            number.disabled = true;
+
+            const percentLabel = document.createElement('span');
+            percentLabel.textContent = '%';
+
+            numberWrapper.appendChild(number);
+            numberWrapper.appendChild(percentLabel);
+
+            controlsWrapper.appendChild(slider);
+            controlsWrapper.appendChild(numberWrapper);
+
+            row.appendChild(header);
+            row.appendChild(controlsWrapper);
+            customMixOptions.appendChild(row);
+
+            customMixControls.set(bot.id, { checkbox, slider, number });
+
+            checkbox.addEventListener('change', () => {
+                if (isUpdatingCustomMixInternally) {
+                    return;
+                }
+
+                if (!checkbox.checked) {
+                    const selectedCount = getSelectedCustomMixCount();
+                    if (customMixState[bot.id].selected && selectedCount <= 2) {
+                        checkbox.checked = true;
+                        return;
+                    }
+                }
+
+                setCustomMixSelected(bot.id, checkbox.checked);
+            });
+
+            slider.addEventListener('input', () => {
+                if (isUpdatingCustomMixInternally || slider.disabled) {
+                    return;
+                }
+                setCustomMixWeight(bot.id, parseInt(slider.value, 10));
+            });
+
+            number.addEventListener('input', () => {
+                if (isUpdatingCustomMixInternally || number.disabled) {
+                    return;
+                }
+                const value = parseInt(number.value, 10);
+                if (Number.isNaN(value)) {
+                    return;
+                }
+                setCustomMixWeight(bot.id, value);
+            });
+
+            number.addEventListener('change', () => {
+                if (isUpdatingCustomMixInternally || number.disabled) {
+                    return;
+                }
+                const value = parseInt(number.value, 10);
+                setCustomMixWeight(bot.id, Number.isNaN(value) ? 0 : value);
+            });
+        });
+    }
+
+    function initializeCustomMixDefaults() {
+        if (!botOptions.length) {
+            return;
+        }
+
+        botOptions.forEach(bot => {
+            setCustomMixSelected(bot.id, false, { skipChangeHandler: true });
+        });
+
+        if (botOptions.length >= 2) {
+            setCustomMixSelected(botOptions[0].id, true, { skipChangeHandler: true });
+            setCustomMixSelected(botOptions[1].id, true, { skipChangeHandler: true });
+            setCustomMixWeight(botOptions[0].id, 50, { skipComplement: true, skipChangeHandler: true });
+            setCustomMixWeight(botOptions[1].id, 50, { skipComplement: true, skipChangeHandler: true });
+        } else if (botOptions.length === 1) {
+            setCustomMixSelected(botOptions[0].id, true, { skipChangeHandler: true });
+            setCustomMixWeight(botOptions[0].id, 100, { skipComplement: true, skipChangeHandler: true });
+        }
+
+        handleCustomMixChange();
+    }
+
+    function getActiveCustomMixEntries() {
+        const summary = getCustomMixSummary();
+        if (summary.valid) {
+            return summary.entries;
+        }
+        return lastValidCustomMix;
+    }
+
+    function chooseBotFromMix(entries) {
+        if (!entries || !entries.length) {
+            return null;
+        }
+
+        const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+        if (total <= 0) {
+            return entries[0].id;
+        }
+
+        let threshold = Math.random() * total;
+        for (const entry of entries) {
+            threshold -= entry.weight;
+            if (threshold < 0) {
+                return entry.id;
+            }
+        }
+
+        return entries[entries.length - 1].id;
+    }
+
+    function updateCustomMixVisibility() {
+        if (!customMixContainer) {
+            return;
+        }
+
+        const shouldShow = gameMode === 'onePlayer' && botDifficulty === 'custom';
+        customMixContainer.style.display = shouldShow ? 'block' : 'none';
+    }
+
+    function isStockfishEvaluationEnabled() {
+        if (botDifficulty === 'stockfish') {
+            return true;
+        }
+
+        if (botDifficulty === 'custom') {
+            const summary = getCustomMixSummary();
+            if (summary.valid) {
+                return summary.entries.some(entry => entry.id === 'stockfish');
+            }
+            return lastValidCustomMix.some(entry => entry.id === 'stockfish');
+        }
+
+        return false;
+    }
 
     // Define resetGame function if not already defined
     const resetGame = () => {
@@ -416,6 +762,71 @@ document.addEventListener("DOMContentLoaded", () => {
         engine.postMessage('go depth 12');
     };
 
+    const performStockfishBotMove = () => {
+        requestStockfish(best => {
+            if (!best) return;
+            const fromFile = best[0];
+            const fromRank = best[1];
+            const toFile = best[2];
+            const toRank = best[3];
+            const fromRow = 8 - parseInt(fromRank, 10);
+            const fromCol = fileLetters.indexOf(fromFile);
+            const toRow = 8 - parseInt(toRank, 10);
+            const toCol = fileLetters.indexOf(toFile);
+            const piece = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"] .piece`);
+            if (piece) {
+                movePieceToSquare(piece, toRow, toCol, best[4]);
+            }
+        });
+    };
+
+    const performRandomBotMove = () => {
+        const pieces = Array.from(document.querySelectorAll('.piece'))
+            .filter(p => p.dataset.color === 'b');
+
+        let allMoves = [];
+
+        pieces.forEach(piece => {
+            const row = parseInt(piece.parentElement.dataset.row, 10);
+            const col = parseInt(piece.parentElement.dataset.col, 10);
+            const legalMoves = getLegalMoves(piece, row, col);
+
+            legalMoves.forEach(move => {
+                allMoves.push({ piece, toRow: move[0], toCol: move[1] });
+            });
+        });
+
+        if (allMoves.length === 0) {
+            alert("Game over! White wins by checkmate or stalemate.");
+            return;
+        }
+
+        const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+        movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
+    };
+
+    const botStrategies = {
+        random: performRandomBotMove,
+        stockfish: performStockfishBotMove
+    };
+
+    function getBotStrategyIdForTurn() {
+        if (botDifficulty === 'custom') {
+            const entries = getActiveCustomMixEntries();
+            const chosen = chooseBotFromMix(entries);
+            if (chosen && botStrategies[chosen]) {
+                return chosen;
+            }
+            return 'random';
+        }
+
+        if (botStrategies[botDifficulty]) {
+            return botDifficulty;
+        }
+
+        return 'random';
+    }
+
     const botMove = () => {
         if (gameOver) {
             return;
@@ -429,45 +840,10 @@ document.addEventListener("DOMContentLoaded", () => {
             navigateToMove(historyStates.length - 1);
         }
 
-        if (botDifficulty === 'stockfish') {
-            requestStockfish(best => {
-                if (!best) return;
-                const fromFile = best[0];
-                const fromRank = best[1];
-                const toFile = best[2];
-                const toRank = best[3];
-                const fromRow = 8 - parseInt(fromRank);
-                const fromCol = fileLetters.indexOf(fromFile);
-                const toRow = 8 - parseInt(toRank);
-                const toCol = fileLetters.indexOf(toFile);
-                const piece = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"] .piece`);
-                if (piece) {
-                    movePieceToSquare(piece, toRow, toCol, best[4]);
-                }
-            });
-        } else {
-            const pieces = Array.from(document.querySelectorAll('.piece'))
-                .filter(p => p.dataset.color === 'b');
-
-            let allMoves = [];
-
-            pieces.forEach(piece => {
-                const row = parseInt(piece.parentElement.dataset.row);
-                const col = parseInt(piece.parentElement.dataset.col);
-                const legalMoves = getLegalMoves(piece, row, col);
-
-                legalMoves.forEach(move => {
-                    allMoves.push({ piece, toRow: move[0], toCol: move[1] });
-                });
-            });
-
-            if (allMoves.length === 0) {
-                alert("Game over! White wins by checkmate or stalemate.");
-                return;
-            }
-
-            const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-            movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
+        const strategyId = getBotStrategyIdForTurn();
+        const strategy = botStrategies[strategyId] || botStrategies.random;
+        if (strategy) {
+            strategy();
         }
     };
 
@@ -981,7 +1357,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const evaluateBoard = () => {
         if (gameOver) return;
-        if (botDifficulty !== 'stockfish') return;
+        if (!isStockfishEvaluationEnabled()) return;
         requestStockfish();
     };
 
@@ -1166,9 +1542,17 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.toggleBotSelection = function() {
-        var gameMode = document.getElementById('gameModeSelect').value;
-        var botSelection = document.getElementById('botSelection');
-        botSelection.style.display = gameMode === 'onePlayer' ? 'block' : 'none';
+        var modeValue = document.getElementById('gameModeSelect').value;
+        var botSelectionElement = document.getElementById('botSelection');
+        if (botSelectionElement) {
+            botSelectionElement.style.display = modeValue === 'onePlayer' ? 'block' : 'none';
+        }
+        var customMixElement = document.getElementById('customMixContainer');
+        if (customMixElement) {
+            var difficultyValue = document.getElementById('botDifficulty').value;
+            const shouldShow = modeValue === 'onePlayer' && difficultyValue === 'custom';
+            customMixElement.style.display = shouldShow ? 'block' : 'none';
+        }
     };
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
@@ -1197,6 +1581,10 @@ document.addEventListener("DOMContentLoaded", () => {
         pendingPromotion.moveDetails.promotionType = type;
         finalizeMove(pendingPromotion.moveDetails);
     };
+    renderCustomMixOptions();
+    initializeCustomMixDefaults();
+    updateCustomMixVisibility();
+
     createBoard();
     historyStates.push(captureDetailedState());
     updateMoveHistoryUI();
