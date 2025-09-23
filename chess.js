@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
+        { id: 'worst', label: 'Worst Moves' },
         { id: 'stockfish', label: 'Stockfish' }
     ];
 
@@ -743,8 +744,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const line = e.data;
             const scoreMatch = line.match(/score (cp|mate) (-?\\d+)/);
             if (scoreMatch) {
-                const value = scoreMatch[1] === 'cp' ? parseInt(scoreMatch[2], 10) : (parseInt(scoreMatch[2],10) > 0 ? 10000 : -10000);
-                updateEvalBar(value);
+                const raw = parseInt(scoreMatch[2], 10);
+                if (!Number.isNaN(raw)) {
+                    const value = scoreMatch[1] === 'cp' ? raw : (raw > 0 ? 10000 : -10000);
+                    const perspective = engine && engine.lastEvaluationTurn ? engine.lastEvaluationTurn : 'w';
+                    updateEvalBar(value, perspective);
+                }
             }
             if (line.startsWith('bestmove') && engine.bestMoveCallback) {
                 const move = line.split(' ')[1];
@@ -758,6 +763,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!engine) return;
         engine.bestMoveCallback = callback || null;
         const fen = generateFEN();
+        const fenParts = fen.split(' ');
+        engine.lastEvaluationTurn = fenParts[1] || turn;
         engine.postMessage('position fen ' + fen);
         engine.postMessage('go depth 12');
     };
@@ -805,8 +812,103 @@ document.addEventListener("DOMContentLoaded", () => {
         movePieceToSquare(randomMove.piece, randomMove.toRow, randomMove.toCol);
     };
 
+    const pieceValuesForWorstBot = {
+        pawn: 100,
+        knight: 320,
+        bishop: 330,
+        rook: 500,
+        queen: 900,
+        king: 20000
+    };
+
+    const cloneBoardState = (board) => {
+        return board.map(row => row.map(cell => (cell ? { ...cell } : null)));
+    };
+
+    const applyMoveForEvaluation = (board, fromRow, fromCol, toRow, toCol, pieceData) => {
+        const movingPiece = { ...pieceData };
+        board[fromRow][fromCol] = null;
+
+        let captureRow = toRow;
+        let captureCol = toCol;
+
+        if (movingPiece.type === 'pawn' && fromCol !== toCol && !board[toRow][toCol]) {
+            captureRow = fromRow;
+            captureCol = toCol;
+        }
+
+        if (board[captureRow]) {
+            board[captureRow][captureCol] = null;
+        }
+
+        if (movingPiece.type === 'king' && Math.abs(toCol - fromCol) === 2) {
+            const rookFromCol = toCol === 6 ? 7 : 0;
+            const rookToCol = toCol === 6 ? 5 : 3;
+            const rookPiece = board[fromRow][rookFromCol];
+            if (rookPiece) {
+                board[fromRow][rookFromCol] = null;
+                board[fromRow][rookToCol] = { ...rookPiece };
+            }
+        }
+
+        if (movingPiece.type === 'pawn' && (toRow === 0 || toRow === 7)) {
+            movingPiece.type = 'queen';
+        }
+
+        board[toRow][toCol] = movingPiece;
+    };
+
+    const evaluateMaterialScore = (board) => {
+        let score = 0;
+        for (const row of board) {
+            for (const cell of row) {
+                if (!cell) continue;
+                const value = pieceValuesForWorstBot[cell.type] || 0;
+                score += cell.color === 'w' ? value : -value;
+            }
+        }
+        return score;
+    };
+
+    const performWorstBotMove = () => {
+        const pieces = Array.from(document.querySelectorAll('.piece'))
+            .filter(p => p.dataset.color === 'b');
+
+        let chosenMove = null;
+        let worstScore = -Infinity;
+        const baseBoard = createBoardCopy();
+
+        pieces.forEach(piece => {
+            const fromRow = parseInt(piece.parentElement.dataset.row, 10);
+            const fromCol = parseInt(piece.parentElement.dataset.col, 10);
+            const legalMoves = getLegalMoves(piece, fromRow, fromCol);
+
+            legalMoves.forEach(([toRow, toCol]) => {
+                const boardCopy = cloneBoardState(baseBoard);
+                const pieceData = boardCopy[fromRow][fromCol];
+                if (!pieceData) {
+                    return;
+                }
+                applyMoveForEvaluation(boardCopy, fromRow, fromCol, toRow, toCol, pieceData);
+                const score = evaluateMaterialScore(boardCopy);
+                if (score > worstScore) {
+                    worstScore = score;
+                    chosenMove = { piece, toRow, toCol };
+                }
+            });
+        });
+
+        if (!chosenMove) {
+            alert("Game over! White wins by checkmate or stalemate.");
+            return;
+        }
+
+        movePieceToSquare(chosenMove.piece, chosenMove.toRow, chosenMove.toCol);
+    };
+
     const botStrategies = {
         random: performRandomBotMove,
+        worst: performWorstBotMove,
         stockfish: performStockfishBotMove
     };
 
@@ -1348,16 +1450,36 @@ document.addEventListener("DOMContentLoaded", () => {
         return false;
     };
 
-    const updateEvalBar = (value) => {
+    const updateEvalBar = (value, sideToMove = 'w') => {
         const evalFill = document.getElementById('evalFill');
-        const clamped = Math.max(-1000, Math.min(1000, value));
+        if (!evalFill) {
+            return;
+        }
+        const adjustedValue = sideToMove === 'b' ? -value : value;
+        const clamped = Math.max(-1000, Math.min(1000, adjustedValue));
         const percentage = ((clamped + 1000) / 2000) * 100;
         evalFill.style.height = percentage + '%';
     };
 
+    const resetEvalBar = () => {
+        const evalFill = document.getElementById('evalFill');
+        if (evalFill) {
+            evalFill.style.height = '50%';
+        }
+    };
+
     const evaluateBoard = () => {
-        if (gameOver) return;
-        if (!isStockfishEvaluationEnabled()) return;
+        if (gameOver) {
+            return;
+        }
+        if (!engine) {
+            resetEvalBar();
+            return;
+        }
+        if (!isStockfishEvaluationEnabled()) {
+            resetEvalBar();
+            return;
+        }
         requestStockfish();
     };
 
