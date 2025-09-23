@@ -41,6 +41,18 @@ body {
     white-space: nowrap;
 }
 
+.stockfish-status {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #2e7d32;
+    line-height: 1.4;
+    display: none;
+}
+
+.stockfish-status.stockfish-status--error {
+    color: #c0392b;
+}
+
 #chessboard {
     display: grid;
     grid-template-columns: repeat(8, 60px);

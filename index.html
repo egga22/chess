@@ -33,6 +33,7 @@
             <option value="stockfish">Stockfish</option>
             <option value="custom">Custom mix</option>
         </select>
+        <div id="stockfishStatus" class="stockfish-status" role="status" aria-live="polite"></div>
         <div id="customMixContainer" class="custom-mix-container" style="display: none;">
             <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
             <div id="customMixOptions" class="custom-mix-options"></div>
@@ -103,7 +104,6 @@
             <div id="moveHistoryList"></div>
         </div>
     </div>
-    <script src="stockfish.js"></script>
     <script src="chess.js"></script>
 </body>
 </html>
