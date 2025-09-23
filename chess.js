@@ -91,6 +91,8 @@ document.addEventListener("DOMContentLoaded", () => {
         b: botSelectors.b ? botSelectors.b.value : 'random'
     };
     let fullmoveNumber = 1;
+    let halfmoveClock = 0;
+    let positionCounts = Object.create(null);
     let engine;
     let gameOver = false;
     let pendingBotMoveTimeout = null;
@@ -110,6 +112,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const blackMaterialAdvantage = document.getElementById('blackMaterialAdvantage');
     const capturedPieceOrder = ['queen', 'rook', 'bishop', 'knight', 'pawn'];
     const capturedPieceValues = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 };
+    const DRAW_MESSAGES = {
+        stalemate: 'Draw by stalemate.',
+        threefold: 'Draw by threefold repetition.',
+        fiftyMove: 'Draw by fifty-move rule.',
+        insufficientMaterial: 'Draw by insufficient material.'
+    };
 
     function createEmptyCapturedPiecesState() {
         return { pawn: 0, knight: 0, bishop: 0, rook: 0, queen: 0 };
@@ -132,7 +140,8 @@ document.addEventListener("DOMContentLoaded", () => {
         turn: 'w',
         castling: createEmptyCastlingRights(),
         enPassant: '-',
-        fullmove: 1
+        fullmove: 1,
+        halfmove: 0
     };
     let activePaletteButton = null;
 
@@ -169,6 +178,17 @@ document.addEventListener("DOMContentLoaded", () => {
             w: { ...createEmptyCapturedPiecesState(), ...(state.w || {}) },
             b: { ...createEmptyCapturedPiecesState(), ...(state.b || {}) }
         };
+    }
+
+    function clonePositionCounts(source = positionCounts) {
+        const clone = Object.create(null);
+        if (!source) {
+            return clone;
+        }
+        Object.keys(source).forEach(key => {
+            clone[key] = source[key];
+        });
+        return clone;
     }
 
     function calculateCapturedMaterial(counts = {}) {
@@ -242,6 +262,114 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         counts[pieceType] += 1;
         renderAllCapturedPieces();
+    }
+
+    function getRepetitionKey(activeColor) {
+        const color = activeColor === 'b' ? 'b' : 'w';
+        return generateFEN({ overrideTurn: color, includeCounters: false });
+    }
+
+    function recordPositionForRepetition(activeColor) {
+        const key = getRepetitionKey(activeColor);
+        if (!positionCounts[key]) {
+            positionCounts[key] = 0;
+        }
+        positionCounts[key] += 1;
+        return positionCounts[key];
+    }
+
+    function resetDrawTracking(initialHalfmove = 0) {
+        halfmoveClock = Number.isFinite(initialHalfmove) && initialHalfmove >= 0 ? initialHalfmove : 0;
+        positionCounts = Object.create(null);
+        recordPositionForRepetition(turn);
+    }
+
+    function isInsufficientMaterial() {
+        const pieces = Array.from(document.querySelectorAll('.piece'));
+        const bishops = { w: [], b: [] };
+        const knights = { w: 0, b: 0 };
+
+        for (const piece of pieces) {
+            const type = piece.dataset.type;
+            const color = piece.dataset.color;
+            if (!type || !color || type === 'king') {
+                continue;
+            }
+            if (type === 'pawn' || type === 'rook' || type === 'queen') {
+                return false;
+            }
+            const parent = piece.parentElement;
+            if (!parent) {
+                continue;
+            }
+            const row = parseInt(parent.dataset.row, 10);
+            const col = parseInt(parent.dataset.col, 10);
+            if (type === 'bishop') {
+                const squareColor = ((row + col) % 2 === 0) ? 'light' : 'dark';
+                bishops[color].push(squareColor);
+            } else if (type === 'knight') {
+                knights[color] += 1;
+            } else {
+                return false;
+            }
+        }
+
+        const totalBishops = bishops.w.length + bishops.b.length;
+        const totalKnights = knights.w + knights.b;
+        const totalMinorPieces = totalBishops + totalKnights;
+
+        if (totalMinorPieces === 0) {
+            return true;
+        }
+        if (totalMinorPieces === 1) {
+            return true;
+        }
+        if (totalMinorPieces === 2) {
+            if (totalKnights === 2 && totalBishops === 0) {
+                return true;
+            }
+            if (totalKnights === 0 && totalBishops === 2) {
+                if (bishops.w.length === 1 && bishops.b.length === 1) {
+                    if (bishops.w[0] === bishops.b[0]) {
+                        return true;
+                    }
+                }
+                if (bishops.w.length === 2 && new Set(bishops.w).size === 1 && bishops.b.length === 0) {
+                    return true;
+                }
+                if (bishops.b.length === 2 && new Set(bishops.b).size === 1 && bishops.w.length === 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    function detectDrawCondition({ isCheck, opponentHasMoves, repetitionCount }) {
+        if (!isCheck && !opponentHasMoves) {
+            return 'stalemate';
+        }
+        if (halfmoveClock >= 100) {
+            return 'fiftyMove';
+        }
+        if (repetitionCount >= 3) {
+            return 'threefold';
+        }
+        if (isInsufficientMaterial()) {
+            return 'insufficientMaterial';
+        }
+        return null;
+    }
+
+    function declareDraw(reason) {
+        if (gameOver) {
+            return;
+        }
+        gameOver = true;
+        cancelScheduledBotMove();
+        const message = DRAW_MESSAGES[reason] || 'Draw.';
+        alert(`Game over! ${message}`);
     }
 
     gameModeSelect.addEventListener("change", () => {
@@ -709,7 +837,8 @@ document.addEventListener("DOMContentLoaded", () => {
             turn: setup.turn === 'b' ? 'b' : 'w',
             castling: typeof setup.castling === 'string' ? setup.castling : '-',
             enPassant: setup.enPassant || '-',
-            fullmove: Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1
+            fullmove: Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1,
+            halfmove: Number.isFinite(setup.halfmove) && setup.halfmove >= 0 ? setup.halfmove : 0
         };
     }
 
@@ -728,7 +857,8 @@ document.addEventListener("DOMContentLoaded", () => {
             turn: 'w',
             castling: 'KQkq',
             enPassant: '-',
-            fullmove: 1
+            fullmove: 1,
+            halfmove: 0
         };
     }
 
@@ -775,7 +905,8 @@ document.addEventListener("DOMContentLoaded", () => {
             turn: 'w',
             castling: 'KQkq',
             enPassant: '-',
-            fullmove: 1
+            fullmove: 1,
+            halfmove: 0
         };
     }
 
@@ -787,7 +918,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (parts.length < 4) {
             throw new Error('FEN must contain at least 4 fields.');
         }
-        const [placement, activeColor, castlingRights, enPassantTarget, , fullmoveStr] = parts;
+        const [placement, activeColor, castlingRights, enPassantTarget, halfmoveStr, fullmoveStr] = parts;
         const rows = placement.split('/');
         if (rows.length !== 8) {
             throw new Error('FEN board description must have 8 ranks.');
@@ -858,6 +989,7 @@ document.addEventListener("DOMContentLoaded", () => {
             enPassant = enPassantTarget;
         }
 
+        const halfmove = Number.parseInt(halfmoveStr, 10);
         const fullmove = Number.parseInt(fullmoveStr, 10);
 
         return {
@@ -865,7 +997,8 @@ document.addEventListener("DOMContentLoaded", () => {
             turn,
             castling: castlingRights || '-',
             enPassant,
-            fullmove: Number.isFinite(fullmove) && fullmove > 0 ? fullmove : 1
+            fullmove: Number.isFinite(fullmove) && fullmove > 0 ? fullmove : 1,
+            halfmove: Number.isFinite(halfmove) && halfmove >= 0 ? halfmove : 0
         };
     }
 
@@ -1092,6 +1225,7 @@ document.addEventListener("DOMContentLoaded", () => {
         turn = setup.turn === 'b' ? 'b' : 'w';
         fullmoveNumber = Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1;
         lastMove = inferLastMoveFromEnPassant(setup.enPassant, turn);
+        resetDrawTracking(Number.isFinite(setup.halfmove) && setup.halfmove >= 0 ? setup.halfmove : 0);
         gameOver = false;
         moveHistoryEntries = [];
         historyStates = [];
@@ -1247,6 +1381,7 @@ document.addEventListener("DOMContentLoaded", () => {
         editorState.turn = cloned.turn === 'b' ? 'b' : 'w';
         editorState.enPassant = sanitizeEnPassantValue(cloned.enPassant);
         editorState.fullmove = Number.isFinite(cloned.fullmove) && cloned.fullmove > 0 ? cloned.fullmove : 1;
+        editorState.halfmove = Number.isFinite(cloned.halfmove) && cloned.halfmove >= 0 ? cloned.halfmove : 0;
         const castlingInfo = computeCastlingInfo(editorState.board, cloned.castling || '-');
         editorState.castling = createEmptyCastlingRights();
         editorState.castling.w.kingSide = castlingInfo.rights.w.kingSide;
@@ -1288,6 +1423,7 @@ document.addEventListener("DOMContentLoaded", () => {
         editorState.castling = createEmptyCastlingRights();
         editorState.enPassant = '-';
         editorState.fullmove = 1;
+        editorState.halfmove = 0;
         renderCustomSetupBoard();
         updateEditorCastlingUI();
         updateEditorInputs();
@@ -1360,7 +1496,8 @@ document.addEventListener("DOMContentLoaded", () => {
             turn: editorState.turn === 'b' ? 'b' : 'w',
             castling: castlingFlagsToString(editorState.castling),
             enPassant: sanitizeEnPassantValue(editorState.enPassant),
-            fullmove: Number.isFinite(editorState.fullmove) && editorState.fullmove > 0 ? editorState.fullmove : 1
+            fullmove: Number.isFinite(editorState.fullmove) && editorState.fullmove > 0 ? editorState.fullmove : 1,
+            halfmove: Number.isFinite(editorState.halfmove) && editorState.halfmove >= 0 ? editorState.halfmove : 0
         };
     }
 
@@ -1939,12 +2076,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const boardCopy = createBoardCopy();
         const inCheck = isKingInCheck(boardCopy, color);
-        gameOver = true;
         if (inCheck) {
+            gameOver = true;
             const winner = color === 'w' ? 'Black' : 'White';
             alert(`Game over! ${winner} wins by checkmate.`);
         } else {
-            alert('Game over! Stalemate.');
+            declareDraw('stalemate');
         }
     }
 
@@ -2381,12 +2518,14 @@ document.addEventListener("DOMContentLoaded", () => {
             board: boardState,
             turn,
             fullmoveNumber,
+            halfmoveClock,
             lastMove: lastMove ? { ...lastMove } : null,
             gameOver,
             castlingRightsState: JSON.parse(JSON.stringify(castlingRightsState)),
             castlingRookColumns: JSON.parse(JSON.stringify(castlingRookColumns)),
             kingHomeRows: { ...kingHomeRows },
-            capturedPieces: cloneCapturedPiecesState(capturedPiecesState)
+            capturedPieces: cloneCapturedPiecesState(capturedPiecesState),
+            positionCounts: clonePositionCounts(positionCounts)
         };
     };
 
@@ -2401,11 +2540,15 @@ document.addEventListener("DOMContentLoaded", () => {
         kingHomeRows = state.kingHomeRows ? { ...state.kingHomeRows } : { w: 7, b: 0 };
         turn = state.turn;
         fullmoveNumber = state.fullmoveNumber;
+        halfmoveClock = typeof state.halfmoveClock === 'number' && state.halfmoveClock >= 0
+            ? state.halfmoveClock
+            : 0;
         lastMove = state.lastMove ? { ...state.lastMove } : null;
         gameOver = state.gameOver;
         pendingPromotion = null;
         selectedPiece = null;
         capturedPiecesState = cloneCapturedPiecesState(state.capturedPieces);
+        positionCounts = clonePositionCounts(state.positionCounts);
         renderAllCapturedPieces();
         checkForCheck();
         evaluateBoard();
@@ -2521,10 +2664,20 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         const opponent = moveDetails.color === 'w' ? 'b' : 'w';
+        if (moveDetails.pieceType === 'pawn' || moveDetails.isCapture) {
+            halfmoveClock = 0;
+        } else {
+            halfmoveClock += 1;
+        }
+        const repetitionCount = recordPositionForRepetition(opponent);
         checkForCheck();
         const boardCopy = createBoardCopy();
         const isCheck = isKingInCheck(boardCopy, opponent);
-        const isMate = isCheck && !hasAnyLegalMoves(opponent);
+        const opponentHasMoves = hasAnyLegalMoves(opponent);
+        const isMate = isCheck && !opponentHasMoves;
+        const drawReason = !isMate
+            ? detectDrawCondition({ isCheck, opponentHasMoves, repetitionCount })
+            : null;
         const notation = formatMoveNotation(moveDetails, { isCheck, isMate });
         const stateIndex = historyStates.length;
 
@@ -2538,6 +2691,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isMate) {
             displayCheckmatePopup();
         } else {
+            if (drawReason) {
+                declareDraw(drawReason);
+            }
             switchTurn();
         }
 
@@ -2564,7 +2720,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    const generateFEN = () => {
+    const generateFEN = (options = {}) => {
+        const { overrideTurn, includeCounters = true } = options;
         const rows = [];
         for (let r = 0; r < 8; r++) {
             let rowStr = '';
@@ -2586,7 +2743,18 @@ document.addEventListener("DOMContentLoaded", () => {
             if (empty > 0) rowStr += empty;
             rows.push(rowStr);
         }
-        return rows.join('/') + ' ' + turn + ' ' + getCastlingRights() + ' ' + getEnPassantSquare() + ' 0 ' + fullmoveNumber;
+        const activeColor = overrideTurn || turn;
+        const fields = [
+            rows.join('/'),
+            activeColor,
+            getCastlingRights(),
+            getEnPassantSquare()
+        ];
+        if (includeCounters) {
+            fields.push(halfmoveClock);
+            fields.push(fullmoveNumber);
+        }
+        return fields.join(' ');
     };
 
     const getCastlingRights = () => {
