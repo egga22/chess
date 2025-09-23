@@ -9,13 +9,23 @@ body {
 
 .settings-container {
     width: 100%;
-    padding: 10px;
+    padding: 10px 16px;
     background: white;
     border-radius: 5px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
     margin-bottom: 20px;
+}
+
+.settings-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .settings-container label {
@@ -25,6 +35,23 @@ body {
 .settings-container select {
     padding: 5px;
     font-size: 16px;
+}
+
+.custom-setup-button {
+    padding: 6px 12px;
+    font-size: 14px;
+    border: 1px solid #2f80ed;
+    background: #2f80ed;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.custom-setup-button:hover,
+.custom-setup-button:focus {
+    background: #1b63c5;
+    border-color: #1b63c5;
 }
 
 #chessboard {
@@ -349,3 +376,277 @@ body {
     font-size: 13px;
     color: #c0392b;
 }
+
+.hidden {
+    display: none !important;
+}
+
+.custom-setup-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 2000;
+}
+
+.custom-setup-dialog {
+    width: min(960px, 95vw);
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.custom-setup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.custom-setup-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.close-modal-button {
+    border: none;
+    background: transparent;
+    font-size: 26px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    line-height: 1;
+}
+
+.close-modal-button:hover,
+.close-modal-button:focus {
+    color: #111;
+}
+
+.custom-setup-body {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.custom-setup-board-wrapper {
+    flex: 0 0 auto;
+}
+
+.custom-setup-board {
+    display: grid;
+    grid-template-columns: repeat(8, 50px);
+    grid-template-rows: repeat(8, 50px);
+    border: 2px solid #333;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.custom-setup-square {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.custom-setup-square.light {
+    background: #f0d9b5;
+}
+
+.custom-setup-square.dark {
+    background: #b58863;
+}
+
+.custom-setup-square img {
+    width: 46px;
+    height: 46px;
+    pointer-events: none;
+}
+
+.custom-setup-sidebar {
+    flex: 1;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.custom-setup-section h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+}
+
+.custom-piece-palette {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+    gap: 8px;
+}
+
+.piece-palette-button {
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.piece-palette-button:hover,
+.piece-palette-button:focus {
+    border-color: #2f80ed;
+}
+
+.piece-palette-button.selected {
+    border-color: #2f80ed;
+    box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.2);
+}
+
+.piece-palette-button img {
+    width: 38px;
+    height: 38px;
+    pointer-events: none;
+}
+
+.piece-palette-button.erase {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+}
+
+.custom-option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.custom-option-group span {
+    font-weight: 600;
+}
+
+.castling-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.custom-setup-section label {
+    display: block;
+    font-weight: 500;
+    margin: 10px 0 4px;
+}
+
+.custom-setup-section input,
+.custom-setup-section textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.custom-setup-section textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.custom-editor-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.custom-editor-buttons button,
+.custom-setup-actions button,
+.custom-setup-section button {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid #2f80ed;
+    background: #2f80ed;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.custom-editor-buttons button.secondary,
+.custom-setup-actions button.secondary,
+.custom-setup-section button.secondary {
+    background: #fff;
+    color: #2f80ed;
+}
+
+.custom-editor-buttons button:hover,
+.custom-setup-actions button:hover,
+.custom-setup-section button:hover {
+    background: #1b63c5;
+    border-color: #1b63c5;
+}
+
+.custom-setup-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.custom-setup-error {
+    color: #d32f2f;
+    font-size: 14px;
+    min-height: 20px;
+}
+
+.custom-setup-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.custom-setup-actions .primary-action {
+    background: #27ae60;
+    border-color: #27ae60;
+}
+
+.custom-setup-actions .primary-action:hover {
+    background: #1f8a4d;
+    border-color: #1f8a4d;
+}
+
+@media (max-width: 900px) {
+    .custom-setup-body {
+        flex-direction: column;
+    }
+
+    .custom-setup-board {
+        grid-template-columns: repeat(8, 45px);
+        grid-template-rows: repeat(8, 45px);
+    }
+
+    .custom-setup-square {
+        width: 45px;
+        height: 45px;
+    }
+
+    .custom-setup-square img {
+        width: 40px;
+        height: 40px;
+    }
+}
+

@@ -7,6 +7,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const customMixOptions = document.getElementById('customMixOptions');
     const customMixSummary = document.getElementById('customMixSummary');
     const customMixError = document.getElementById('customMixError');
+    const gameTypeSelect = document.getElementById('gameTypeSelect');
+    const editCustomSetupButton = document.getElementById('editCustomSetupButton');
+    const customSetupModal = document.getElementById('customSetupModal');
+    const customSetupBoard = document.getElementById('customSetupBoard');
+    const customPiecePalette = document.getElementById('customPiecePalette');
+    const customSetupError = document.getElementById('customSetupError');
+    const customEnPassantInput = document.getElementById('customEnPassant');
+    const customFullmoveInput = document.getElementById('customFullmove');
+    const customFenInput = document.getElementById('customFenInput');
+    const customTurnRadios = document.getElementsByName('customSetupTurn');
+    const castlingCheckboxes = {
+        w: {
+            kingSide: document.getElementById('customCastlingWhiteK'),
+            queenSide: document.getElementById('customCastlingWhiteQ')
+        },
+        b: {
+            kingSide: document.getElementById('customCastlingBlackK'),
+            queenSide: document.getElementById('customCastlingBlackQ')
+        }
+    };
+    const clearCustomBoardButton = document.getElementById('clearCustomBoard');
+    const fillStandardBoardButton = document.getElementById('fillStandardBoard');
+    const loadFenButton = document.getElementById('loadFenButton');
+    const cancelCustomSetupButton = document.getElementById('cancelCustomSetup');
+    const applyCustomSetupButton = document.getElementById('applyCustomSetup');
+    const closeCustomSetupButton = document.getElementById('closeCustomSetup');
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
@@ -38,6 +64,46 @@ document.addEventListener("DOMContentLoaded", () => {
     let pendingPromotion = null;
     const fileLetters = 'abcdefgh';
     const pieceNotationMap = { pawn: '', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };
+    const CASTLING_KING_TARGET_COLUMNS = { king: 6, queen: 2 };
+    const CASTLING_ROOK_TARGET_COLUMNS = { king: 5, queen: 3 };
+
+    let gameType = gameTypeSelect ? gameTypeSelect.value : 'standard';
+    let customSetup = null;
+    let currentInitialSetup = null;
+    let castlingRightsState = createEmptyCastlingRights();
+    let castlingRookColumns = createEmptyCastlingRookColumns();
+    let kingHomeRows = { w: 7, b: 0 };
+    const editorState = {
+        board: createEmptyBoardMatrix(),
+        selectedPiece: null,
+        turn: 'w',
+        castling: createEmptyCastlingRights(),
+        enPassant: '-',
+        fullmove: 1
+    };
+    let activePaletteButton = null;
+
+    function createEmptyCastlingRights() {
+        return {
+            w: { kingSide: false, queenSide: false },
+            b: { kingSide: false, queenSide: false }
+        };
+    }
+
+    function createEmptyCastlingRookColumns() {
+        return {
+            w: { kingSide: null, queenSide: null },
+            b: { kingSide: null, queenSide: null }
+        };
+    }
+
+    function createEmptyBoardMatrix() {
+        const board = [];
+        for (let row = 0; row < 8; row++) {
+            board[row] = Array(8).fill(null);
+        }
+        return board;
+    }
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
@@ -49,6 +115,23 @@ document.addEventListener("DOMContentLoaded", () => {
         updateCustomMixVisibility();
         resetGame(); // Reset the game when switching modes
     });
+
+    if (gameTypeSelect) {
+        gameTypeSelect.addEventListener('change', () => {
+            gameType = gameTypeSelect.value;
+            updateCustomSetupButtonVisibility();
+            if (gameType === 'custom' && !customSetup) {
+                customSetup = createStandardSetup();
+            }
+            resetGame();
+        });
+    }
+
+    if (editCustomSetupButton) {
+        editCustomSetupButton.addEventListener('click', () => {
+            openCustomSetupModal();
+        });
+    }
 
     botDifficultySelect.addEventListener('change', () => {
         botDifficulty = botDifficultySelect.value;
@@ -367,6 +450,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function isStockfishEvaluationEnabled() {
+        if (gameType === 'chess960') {
+            return false;
+        }
+
         if (botDifficulty === 'stockfish') {
             return true;
         }
@@ -382,19 +469,401 @@ document.addEventListener("DOMContentLoaded", () => {
         return false;
     }
 
-    // Define resetGame function if not already defined
-    const resetGame = () => {
+    function cloneBoardMatrix(board) {
+        return board.map(row => row.map(cell => (cell ? { ...cell } : null)));
+    }
+
+    function cloneSetup(setup) {
+        if (!setup) {
+            return null;
+        }
+        return {
+            board: cloneBoardMatrix(setup.board || createEmptyBoardMatrix()),
+            turn: setup.turn === 'b' ? 'b' : 'w',
+            castling: typeof setup.castling === 'string' ? setup.castling : '-',
+            enPassant: setup.enPassant || '-',
+            fullmove: Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1
+        };
+    }
+
+    function createStandardSetup() {
+        const board = createEmptyBoardMatrix();
+        const whiteBack = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
+        const blackBack = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
+        for (let col = 0; col < 8; col++) {
+            board[7][col] = { type: whiteBack[col], color: 'w', moved: false };
+            board[6][col] = { type: 'pawn', color: 'w', moved: false };
+            board[1][col] = { type: 'pawn', color: 'b', moved: false };
+            board[0][col] = { type: blackBack[col], color: 'b', moved: false };
+        }
+        return {
+            board,
+            turn: 'w',
+            castling: 'KQkq',
+            enPassant: '-',
+            fullmove: 1
+        };
+    }
+
+    function createChess960Setup() {
+        const board = createEmptyBoardMatrix();
+        const evenPositions = [0, 2, 4, 6];
+        const oddPositions = [1, 3, 5, 7];
+        const backRank = Array(8).fill(null);
+
+        const darkIndex = evenPositions.splice(Math.floor(Math.random() * evenPositions.length), 1)[0];
+        const lightIndex = oddPositions.splice(Math.floor(Math.random() * oddPositions.length), 1)[0];
+        backRank[darkIndex] = 'bishop';
+        backRank[lightIndex] = 'bishop';
+
+        const remaining = [];
+        for (let i = 0; i < 8; i++) {
+            if (!backRank[i]) {
+                remaining.push(i);
+            }
+        }
+
+        const queenIndex = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+        backRank[queenIndex] = 'queen';
+
+        const knightIndex1 = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+        backRank[knightIndex1] = 'knight';
+        const knightIndex2 = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+        backRank[knightIndex2] = 'knight';
+
+        remaining.sort((a, b) => a - b);
+        backRank[remaining[0]] = 'rook';
+        backRank[remaining[1]] = 'king';
+        backRank[remaining[2]] = 'rook';
+
+        for (let col = 0; col < 8; col++) {
+            board[7][col] = { type: backRank[col], color: 'w', moved: false };
+            board[6][col] = { type: 'pawn', color: 'w', moved: false };
+            board[1][col] = { type: 'pawn', color: 'b', moved: false };
+            board[0][col] = { type: backRank[col], color: 'b', moved: false };
+        }
+
+        return {
+            board,
+            turn: 'w',
+            castling: 'KQkq',
+            enPassant: '-',
+            fullmove: 1
+        };
+    }
+
+    function parseFEN(fen) {
+        if (typeof fen !== 'string' || !fen.trim()) {
+            throw new Error('FEN cannot be empty.');
+        }
+        const parts = fen.trim().split(/\s+/);
+        if (parts.length < 4) {
+            throw new Error('FEN must contain at least 4 fields.');
+        }
+        const [placement, activeColor, castlingRights, enPassantTarget, , fullmoveStr] = parts;
+        const rows = placement.split('/');
+        if (rows.length !== 8) {
+            throw new Error('FEN board description must have 8 ranks.');
+        }
+
+        const board = createEmptyBoardMatrix();
+        let whiteKingCount = 0;
+        let blackKingCount = 0;
+
+        rows.forEach((rowStr, rowIndex) => {
+            let colIndex = 0;
+            for (const char of rowStr) {
+                if (colIndex > 7) {
+                    throw new Error('FEN rank has too many squares.');
+                }
+                if (/^[1-8]$/.test(char)) {
+                    colIndex += parseInt(char, 10);
+                    continue;
+                }
+                const lower = char.toLowerCase();
+                const typeMap = {
+                    p: 'pawn',
+                    r: 'rook',
+                    n: 'knight',
+                    b: 'bishop',
+                    q: 'queen',
+                    k: 'king'
+                };
+                const type = typeMap[lower];
+                if (!type) {
+                    throw new Error(`Invalid piece character '${char}' in FEN.`);
+                }
+                const color = char === lower ? 'b' : 'w';
+                if (type === 'king') {
+                    if (color === 'w') {
+                        whiteKingCount += 1;
+                    } else {
+                        blackKingCount += 1;
+                    }
+                }
+                const pieceData = {
+                    type,
+                    color,
+                    moved: false
+                };
+                if (type === 'pawn') {
+                    const homeRow = color === 'w' ? 6 : 1;
+                    pieceData.moved = rowIndex !== homeRow;
+                }
+                board[rowIndex][colIndex] = pieceData;
+                colIndex += 1;
+            }
+            if (colIndex !== 8) {
+                throw new Error('FEN rank does not add up to 8 squares.');
+            }
+        });
+
+        if (whiteKingCount !== 1 || blackKingCount !== 1) {
+            throw new Error('FEN must contain exactly one king per side.');
+        }
+
+        const turn = activeColor === 'b' ? 'b' : 'w';
+        let enPassant = '-';
+        if (enPassantTarget && enPassantTarget !== '-') {
+            if (!/^[a-h][36]$/.test(enPassantTarget)) {
+                throw new Error('Invalid en passant target square.');
+            }
+            enPassant = enPassantTarget;
+        }
+
+        const fullmove = Number.parseInt(fullmoveStr, 10);
+
+        return {
+            board,
+            turn,
+            castling: castlingRights || '-',
+            enPassant,
+            fullmove: Number.isFinite(fullmove) && fullmove > 0 ? fullmove : 1
+        };
+    }
+
+    function getSetupForCurrentGameType() {
+        if (gameType === 'chess960') {
+            return createChess960Setup();
+        }
+        if (gameType === 'custom') {
+            if (!customSetup) {
+                customSetup = createStandardSetup();
+            }
+            return cloneSetup(customSetup);
+        }
+        return createStandardSetup();
+    }
+
+    function inferLastMoveFromEnPassant(target, activeTurn) {
+        if (!target || target === '-' || target.length !== 2) {
+            return null;
+        }
+        const file = target[0];
+        const rank = parseInt(target[1], 10);
+        if (!fileLetters.includes(file) || Number.isNaN(rank)) {
+            return null;
+        }
+        const col = fileLetters.indexOf(file);
+        if (rank === 3 && activeTurn === 'b') {
+            return {
+                color: 'w',
+                pieceType: 'pawn',
+                fromRow: 6,
+                fromCol: col,
+                toRow: 4,
+                toCol: col,
+                resultingPieceType: 'pawn',
+                isCapture: false,
+                capturedPieceType: null,
+                capturedPieceColor: null,
+                isEnPassant: false,
+                isCastling: null
+            };
+        }
+        if (rank === 6 && activeTurn === 'w') {
+            return {
+                color: 'b',
+                pieceType: 'pawn',
+                fromRow: 1,
+                fromCol: col,
+                toRow: 3,
+                toCol: col,
+                resultingPieceType: 'pawn',
+                isCapture: false,
+                capturedPieceType: null,
+                capturedPieceColor: null,
+                isEnPassant: false,
+                isCastling: null
+            };
+        }
+        return null;
+    }
+
+    function computeCastlingInfo(board, rightsString = '-') {
+        const rights = createEmptyCastlingRights();
+        const rooks = createEmptyCastlingRookColumns();
+        const homes = { w: 7, b: 0 };
+
+        const kingPositions = { w: null, b: null };
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const cell = board[row][col];
+                if (cell && cell.type === 'king') {
+                    kingPositions[cell.color] = { row, col };
+                }
+            }
+        }
+
+        if (kingPositions.w) {
+            homes.w = kingPositions.w.row;
+        }
+        if (kingPositions.b) {
+            homes.b = kingPositions.b.row;
+        }
+
+        const assignByDirection = (color, direction) => {
+            const kingPos = kingPositions[color];
+            if (!kingPos) {
+                return;
+            }
+            let col = kingPos.col + direction;
+            while (col >= 0 && col < 8) {
+                const piece = board[kingPos.row][col];
+                if (piece && piece.type === 'rook' && piece.color === color) {
+                    const sideKey = direction > 0 ? 'kingSide' : 'queenSide';
+                    rights[color][sideKey] = true;
+                    rooks[color][sideKey] = col;
+                    break;
+                }
+                col += direction;
+            }
+        };
+
+        const assignByColumn = (color, column) => {
+            const kingPos = kingPositions[color];
+            if (!kingPos || column < 0 || column > 7) {
+                return;
+            }
+            const piece = board[kingPos.row][column];
+            if (!piece || piece.type !== 'rook' || piece.color !== color) {
+                return;
+            }
+            const sideKey = column > kingPos.col ? 'kingSide' : 'queenSide';
+            rights[color][sideKey] = true;
+            rooks[color][sideKey] = column;
+        };
+
+        if (rightsString && rightsString !== '-') {
+            rightsString.split('').forEach(char => {
+                if (char === 'K') {
+                    assignByDirection('w', 1);
+                } else if (char === 'Q') {
+                    assignByDirection('w', -1);
+                } else if (char === 'k') {
+                    assignByDirection('b', 1);
+                } else if (char === 'q') {
+                    assignByDirection('b', -1);
+                } else if (/[A-H]/.test(char)) {
+                    assignByColumn('w', fileLetters.indexOf(char.toLowerCase()));
+                } else if (/[a-h]/.test(char)) {
+                    assignByColumn('b', fileLetters.indexOf(char));
+                }
+            });
+        }
+
+        return { rights, rooks, homes };
+    }
+
+    function initializeCastlingTracking(board, rightsString = '-') {
+        const info = computeCastlingInfo(board, rightsString);
+        castlingRightsState = info.rights;
+        castlingRookColumns = info.rooks;
+        kingHomeRows = info.homes;
+    }
+
+    function disableCastlingRight(color, sideKey) {
+        if (castlingRightsState[color]) {
+            castlingRightsState[color][sideKey] = false;
+        }
+        if (castlingRookColumns[color]) {
+            castlingRookColumns[color][sideKey] = null;
+        }
+    }
+
+    function getCastlingSideByColumn(color, column) {
+        if (!castlingRookColumns[color]) {
+            return null;
+        }
+        if (castlingRookColumns[color].kingSide === column) {
+            return 'kingSide';
+        }
+        if (castlingRookColumns[color].queenSide === column) {
+            return 'queenSide';
+        }
+        return null;
+    }
+
+    function updateCastlingRightsAfterMove(moveDetails, capturedRow, capturedCol) {
+        const { pieceType, color, fromCol, capturedPieceType, capturedPieceColor } = moveDetails;
+        if (pieceType === 'king') {
+            disableCastlingRight(color, 'kingSide');
+            disableCastlingRight(color, 'queenSide');
+        }
+        if (pieceType === 'rook') {
+            const sideKey = getCastlingSideByColumn(color, fromCol);
+            if (sideKey) {
+                disableCastlingRight(color, sideKey);
+            }
+        }
+        if (capturedPieceType === 'rook' && capturedPieceColor != null && capturedCol != null) {
+            const homeRow = getHomeRow(capturedPieceColor);
+            if (capturedRow === homeRow) {
+                const enemySide = getCastlingSideByColumn(capturedPieceColor, capturedCol);
+                if (enemySide) {
+                    disableCastlingRight(capturedPieceColor, enemySide);
+                }
+            }
+        }
+    }
+
+    function getHomeRow(color) {
+        if (kingHomeRows[color] !== undefined) {
+            return kingHomeRows[color];
+        }
+        return color === 'w' ? 7 : 0;
+    }
+
+    function getCastlingSideForMove(color, toCol) {
+        if (!castlingRightsState[color]) {
+            return null;
+        }
+        if (castlingRightsState[color].kingSide && toCol === CASTLING_KING_TARGET_COLUMNS.king) {
+            return 'king';
+        }
+        if (castlingRightsState[color].queenSide && toCol === CASTLING_KING_TARGET_COLUMNS.queen) {
+            return 'queen';
+        }
+        return null;
+    }
+
+    function applySetupToGame(setup) {
+        currentInitialSetup = cloneSetup(setup);
         const promotionUI = document.querySelector('.promotion-ui');
         if (promotionUI) {
             promotionUI.remove();
         }
         pendingPromotion = null;
+
+        const board = cloneBoardMatrix(setup.board || createEmptyBoardMatrix());
         chessboard.innerHTML = '';
-        createBoard();
+        createBoard(board);
+        initializeCastlingTracking(board, setup.castling || '-');
+
         selectedPiece = null;
-        turn = 'w';
-        lastMove = null;
-        fullmoveNumber = 1;
+        turn = setup.turn === 'b' ? 'b' : 'w';
+        fullmoveNumber = Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1;
+        lastMove = inferLastMoveFromEnPassant(setup.enPassant, turn);
         gameOver = false;
         moveHistoryEntries = [];
         historyStates = [];
@@ -407,6 +876,431 @@ document.addEventListener("DOMContentLoaded", () => {
         historyStates.push(captureDetailedState());
         updateMoveHistoryUI();
         evaluateBoard();
+    }
+
+    function sanitizeEnPassantValue(value) {
+        if (!value) {
+            return '-';
+        }
+        const trimmed = value.trim().toLowerCase();
+        if (trimmed === '-') {
+            return '-';
+        }
+        if (/^[a-h][36]$/.test(trimmed)) {
+            return trimmed;
+        }
+        return '-';
+    }
+
+    function renderCustomSetupBoard() {
+        if (!customSetupBoard) {
+            return;
+        }
+        customSetupBoard.innerHTML = '';
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const square = document.createElement('div');
+                square.className = `custom-setup-square ${((row + col) % 2 === 0) ? 'light' : 'dark'}`;
+                square.dataset.row = row;
+                square.dataset.col = col;
+                const pieceData = editorState.board[row][col];
+                if (pieceData) {
+                    const img = document.createElement('img');
+                    img.src = `images/${pieceData.type}-${pieceData.color}.svg`;
+                    img.alt = `${pieceData.color} ${pieceData.type}`;
+                    square.appendChild(img);
+                }
+                square.addEventListener('click', () => handleEditorSquareClick(row, col));
+                customSetupBoard.appendChild(square);
+            }
+        }
+    }
+
+    function handleEditorSquareClick(row, col) {
+        const selection = editorState.selectedPiece;
+        if (!selection) {
+            editorState.board[row][col] = null;
+        } else {
+            const homeRow = selection.color === 'w' ? 6 : 1;
+            editorState.board[row][col] = {
+                type: selection.type,
+                color: selection.color,
+                moved: selection.type === 'pawn' ? row !== homeRow : false
+            };
+        }
+        renderCustomSetupBoard();
+    }
+
+    function selectPalettePiece(piece, button) {
+        editorState.selectedPiece = piece;
+        if (activePaletteButton) {
+            activePaletteButton.classList.remove('selected');
+        }
+        activePaletteButton = button;
+        if (activePaletteButton) {
+            activePaletteButton.classList.add('selected');
+        }
+    }
+
+    function renderPiecePalette() {
+        if (!customPiecePalette) {
+            return;
+        }
+        customPiecePalette.innerHTML = '';
+        const palettePieces = [
+            { type: 'king', color: 'w' },
+            { type: 'queen', color: 'w' },
+            { type: 'rook', color: 'w' },
+            { type: 'bishop', color: 'w' },
+            { type: 'knight', color: 'w' },
+            { type: 'pawn', color: 'w' },
+            { type: 'king', color: 'b' },
+            { type: 'queen', color: 'b' },
+            { type: 'rook', color: 'b' },
+            { type: 'bishop', color: 'b' },
+            { type: 'knight', color: 'b' },
+            { type: 'pawn', color: 'b' }
+        ];
+
+        palettePieces.forEach(piece => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'piece-palette-button';
+            button.dataset.type = piece.type;
+            button.dataset.color = piece.color;
+            const img = document.createElement('img');
+            img.src = `images/${piece.type}-${piece.color}.svg`;
+            img.alt = `${piece.color} ${piece.type}`;
+            button.appendChild(img);
+            button.addEventListener('click', () => selectPalettePiece({ ...piece }, button));
+            customPiecePalette.appendChild(button);
+        });
+
+        const eraserButton = document.createElement('button');
+        eraserButton.type = 'button';
+        eraserButton.className = 'piece-palette-button erase';
+        eraserButton.dataset.tool = 'erase';
+        eraserButton.textContent = 'Erase';
+        eraserButton.addEventListener('click', () => selectPalettePiece(null, eraserButton));
+        customPiecePalette.appendChild(eraserButton);
+
+        setPaletteSelectionFromState();
+    }
+
+    function setPaletteSelectionFromState() {
+        if (!customPiecePalette) {
+            return;
+        }
+        let targetButton = null;
+        if (editorState.selectedPiece) {
+            const { type, color } = editorState.selectedPiece;
+            targetButton = customPiecePalette.querySelector(`.piece-palette-button[data-type='${type}'][data-color='${color}']`);
+        } else {
+            targetButton = customPiecePalette.querySelector('.piece-palette-button[data-tool="erase"]');
+        }
+        if (!targetButton) {
+            targetButton = customPiecePalette.querySelector(`.piece-palette-button[data-type='pawn'][data-color='w']`);
+            editorState.selectedPiece = targetButton ? { type: 'pawn', color: 'w' } : null;
+        }
+        if (targetButton) {
+            if (activePaletteButton) {
+                activePaletteButton.classList.remove('selected');
+            }
+            activePaletteButton = targetButton;
+            activePaletteButton.classList.add('selected');
+        }
+    }
+
+    function loadEditorFromSetup(setup) {
+        const cloned = cloneSetup(setup) || createStandardSetup();
+        editorState.board = cloneBoardMatrix(cloned.board || createEmptyBoardMatrix());
+        editorState.turn = cloned.turn === 'b' ? 'b' : 'w';
+        editorState.enPassant = sanitizeEnPassantValue(cloned.enPassant);
+        editorState.fullmove = Number.isFinite(cloned.fullmove) && cloned.fullmove > 0 ? cloned.fullmove : 1;
+        const castlingInfo = computeCastlingInfo(editorState.board, cloned.castling || '-');
+        editorState.castling = createEmptyCastlingRights();
+        editorState.castling.w.kingSide = castlingInfo.rights.w.kingSide;
+        editorState.castling.w.queenSide = castlingInfo.rights.w.queenSide;
+        editorState.castling.b.kingSide = castlingInfo.rights.b.kingSide;
+        editorState.castling.b.queenSide = castlingInfo.rights.b.queenSide;
+        renderCustomSetupBoard();
+        updateEditorCastlingUI();
+        updateEditorInputs();
+        setPaletteSelectionFromState();
+    }
+
+    function updateEditorCastlingUI() {
+        if (!castlingCheckboxes.w || !castlingCheckboxes.b) {
+            return;
+        }
+        castlingCheckboxes.w.kingSide.checked = !!(editorState.castling.w && editorState.castling.w.kingSide);
+        castlingCheckboxes.w.queenSide.checked = !!(editorState.castling.w && editorState.castling.w.queenSide);
+        castlingCheckboxes.b.kingSide.checked = !!(editorState.castling.b && editorState.castling.b.kingSide);
+        castlingCheckboxes.b.queenSide.checked = !!(editorState.castling.b && editorState.castling.b.queenSide);
+    }
+
+    function updateEditorInputs() {
+        if (customEnPassantInput) {
+            customEnPassantInput.value = editorState.enPassant;
+        }
+        if (customFullmoveInput) {
+            customFullmoveInput.value = editorState.fullmove;
+        }
+        if (customTurnRadios && customTurnRadios.length) {
+            customTurnRadios.forEach(radio => {
+                radio.checked = radio.value === editorState.turn;
+            });
+        }
+    }
+
+    function clearEditorBoardState() {
+        editorState.board = createEmptyBoardMatrix();
+        editorState.castling = createEmptyCastlingRights();
+        editorState.enPassant = '-';
+        editorState.fullmove = 1;
+        renderCustomSetupBoard();
+        updateEditorCastlingUI();
+        updateEditorInputs();
+        showEditorError('');
+    }
+
+    function fillEditorWithStandard() {
+        loadEditorFromSetup(createStandardSetup());
+        showEditorError('');
+    }
+
+    function openCustomSetupModal() {
+        if (!customSetupModal) {
+            return;
+        }
+        showEditorError('');
+        if (!customPiecePalette || !customPiecePalette.childElementCount) {
+            renderPiecePalette();
+        } else {
+            setPaletteSelectionFromState();
+        }
+        const setupToLoad = customSetup ? cloneSetup(customSetup) : createStandardSetup();
+        loadEditorFromSetup(setupToLoad);
+        customSetupModal.classList.remove('hidden');
+    }
+
+    function closeCustomSetupModal() {
+        if (!customSetupModal) {
+            return;
+        }
+        customSetupModal.classList.add('hidden');
+        showEditorError('');
+    }
+
+    function castlingFlagsToString(flags) {
+        let result = '';
+        if (flags.w && flags.w.kingSide) {
+            result += 'K';
+        }
+        if (flags.w && flags.w.queenSide) {
+            result += 'Q';
+        }
+        if (flags.b && flags.b.kingSide) {
+            result += 'k';
+        }
+        if (flags.b && flags.b.queenSide) {
+            result += 'q';
+        }
+        return result || '-';
+    }
+
+    function buildSetupFromEditor() {
+        const board = cloneBoardMatrix(editorState.board);
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const cell = board[row][col];
+                if (cell) {
+                    if (cell.type === 'pawn') {
+                        const homeRow = cell.color === 'w' ? 6 : 1;
+                        cell.moved = row !== homeRow;
+                    } else {
+                        cell.moved = cell.moved === true ? true : false;
+                    }
+                }
+            }
+        }
+
+        return {
+            board,
+            turn: editorState.turn === 'b' ? 'b' : 'w',
+            castling: castlingFlagsToString(editorState.castling),
+            enPassant: sanitizeEnPassantValue(editorState.enPassant),
+            fullmove: Number.isFinite(editorState.fullmove) && editorState.fullmove > 0 ? editorState.fullmove : 1
+        };
+    }
+
+    function validateEditorSetup(setup) {
+        let whiteKing = 0;
+        let blackKing = 0;
+        setup.board.forEach(row => {
+            row.forEach(cell => {
+                if (cell && cell.type === 'king') {
+                    if (cell.color === 'w') {
+                        whiteKing += 1;
+                    } else {
+                        blackKing += 1;
+                    }
+                }
+            });
+        });
+        if (whiteKing !== 1 || blackKing !== 1) {
+            return 'Custom setup must include exactly one white king and one black king.';
+        }
+
+        const castlingInfo = computeCastlingInfo(setup.board, setup.castling || '-');
+        if (editorState.castling.w.kingSide && !castlingInfo.rights.w.kingSide) {
+            return 'White O-O requires a rook on the king\'s right on the home rank.';
+        }
+        if (editorState.castling.w.queenSide && !castlingInfo.rights.w.queenSide) {
+            return 'White O-O-O requires a rook on the king\'s left on the home rank.';
+        }
+        if (editorState.castling.b.kingSide && !castlingInfo.rights.b.kingSide) {
+            return 'Black O-O requires a rook on the king\'s right on the home rank.';
+        }
+        if (editorState.castling.b.queenSide && !castlingInfo.rights.b.queenSide) {
+            return 'Black O-O-O requires a rook on the king\'s left on the home rank.';
+        }
+
+        return null;
+    }
+
+    function showEditorError(message) {
+        if (customSetupError) {
+            customSetupError.textContent = message || '';
+        }
+    }
+
+    function applyCustomSetupChanges() {
+        try {
+            const setup = buildSetupFromEditor();
+            const validationError = validateEditorSetup(setup);
+            if (validationError) {
+                showEditorError(validationError);
+                return;
+            }
+            customSetup = cloneSetup(setup);
+            if (gameTypeSelect) {
+                gameTypeSelect.value = 'custom';
+            }
+            gameType = 'custom';
+            updateCustomSetupButtonVisibility();
+            closeCustomSetupModal();
+            resetGame();
+        } catch (error) {
+            showEditorError(error && error.message ? error.message : 'Unable to apply the custom setup.');
+        }
+    }
+
+    function attachCastlingCheckboxHandler(color, sideKey, checkbox) {
+        if (!checkbox) {
+            return;
+        }
+        checkbox.addEventListener('change', () => {
+            if (!editorState.castling[color]) {
+                editorState.castling[color] = { kingSide: false, queenSide: false };
+            }
+            editorState.castling[color][sideKey] = checkbox.checked;
+        });
+    }
+
+    if (clearCustomBoardButton) {
+        clearCustomBoardButton.addEventListener('click', () => {
+            clearEditorBoardState();
+        });
+    }
+
+    if (fillStandardBoardButton) {
+        fillStandardBoardButton.addEventListener('click', () => {
+            fillEditorWithStandard();
+        });
+    }
+
+    if (loadFenButton) {
+        loadFenButton.addEventListener('click', () => {
+            if (!customFenInput) {
+                return;
+            }
+            const fenValue = customFenInput.value.trim();
+            if (!fenValue) {
+                showEditorError('Enter a FEN string to load.');
+                return;
+            }
+            try {
+                const setup = parseFEN(fenValue);
+                loadEditorFromSetup(setup);
+                showEditorError('');
+                customFenInput.value = '';
+            } catch (error) {
+                showEditorError(error && error.message ? error.message : 'Invalid FEN string.');
+            }
+        });
+    }
+
+    if (cancelCustomSetupButton) {
+        cancelCustomSetupButton.addEventListener('click', () => {
+            closeCustomSetupModal();
+        });
+    }
+
+    if (closeCustomSetupButton) {
+        closeCustomSetupButton.addEventListener('click', () => {
+            closeCustomSetupModal();
+        });
+    }
+
+    if (applyCustomSetupButton) {
+        applyCustomSetupButton.addEventListener('click', () => {
+            applyCustomSetupChanges();
+        });
+    }
+
+    if (customEnPassantInput) {
+        customEnPassantInput.addEventListener('change', () => {
+            editorState.enPassant = sanitizeEnPassantValue(customEnPassantInput.value);
+            customEnPassantInput.value = editorState.enPassant;
+        });
+    }
+
+    if (customFullmoveInput) {
+        customFullmoveInput.addEventListener('change', () => {
+            const parsed = parseInt(customFullmoveInput.value, 10);
+            editorState.fullmove = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+            customFullmoveInput.value = editorState.fullmove;
+        });
+    }
+
+    if (customTurnRadios && customTurnRadios.length) {
+        customTurnRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    editorState.turn = radio.value === 'b' ? 'b' : 'w';
+                }
+            });
+        });
+    }
+
+    attachCastlingCheckboxHandler('w', 'kingSide', castlingCheckboxes.w ? castlingCheckboxes.w.kingSide : null);
+    attachCastlingCheckboxHandler('w', 'queenSide', castlingCheckboxes.w ? castlingCheckboxes.w.queenSide : null);
+    attachCastlingCheckboxHandler('b', 'kingSide', castlingCheckboxes.b ? castlingCheckboxes.b.kingSide : null);
+    attachCastlingCheckboxHandler('b', 'queenSide', castlingCheckboxes.b ? castlingCheckboxes.b.queenSide : null);
+
+    function updateCustomSetupButtonVisibility() {
+        if (!editCustomSetupButton) {
+            return;
+        }
+        const shouldShow = gameType === 'custom';
+        editCustomSetupButton.style.display = shouldShow ? 'inline-flex' : 'none';
+    }
+
+    // Define resetGame function if not already defined
+    const resetGame = () => {
+        const setup = getSetupForCurrentGameType();
+        applySetupToGame(setup);
     };
     function createBoard(boardState = null) {
         const chessboard = document.getElementById('chessboard');
@@ -548,6 +1442,8 @@ document.addEventListener("DOMContentLoaded", () => {
         let isCapture = false;
         let capturedPieceType = null;
         let capturedPieceColor = null;
+        let capturedRow = null;
+        let capturedCol = null;
         let isEnPassant = false;
         let isCastling = null;
 
@@ -570,6 +1466,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 lastMove.toRow === fromRow &&
                 lastMove.toCol === toCol
             ) {
+                const enemyParent = enemyPawn.parentElement;
+                if (enemyParent) {
+                    capturedRow = parseInt(enemyParent.dataset.row, 10);
+                    capturedCol = parseInt(enemyParent.dataset.col, 10);
+                }
                 capturedPieceType = enemyPawn.dataset.type;
                 capturedPieceColor = enemyPawn.dataset.color;
                 isCapture = true;
@@ -580,6 +1481,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         targetPiece = square.querySelector('.piece');
         if (targetPiece) {
+            const targetParent = targetPiece.parentElement;
+            if (targetParent) {
+                capturedRow = parseInt(targetParent.dataset.row, 10);
+                capturedCol = parseInt(targetParent.dataset.col, 10);
+            }
             capturedPieceType = targetPiece.dataset.type;
             capturedPieceColor = targetPiece.dataset.color;
             isCapture = true;
@@ -588,16 +1494,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
         square.appendChild(piece);
 
-        if (pieceType === 'king' && Math.abs(fromCol - toCol) === 2) {
-            const rookCol = toCol === 6 ? 7 : 0;
-            const rookTargetCol = toCol === 6 ? 5 : 3;
-            const rook = document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`);
-            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
-            if (rook && rookTargetSquare) {
-                rookTargetSquare.appendChild(rook);
-                rook.dataset.moved = 'true';
+        if (pieceType === 'king') {
+            const castlingSide = getCastlingSideForMove(color, toCol);
+            if (castlingSide) {
+                const sideKey = castlingSide === 'king' ? 'kingSide' : 'queenSide';
+                const rookCol = castlingRookColumns[color][sideKey];
+                const rookTargetCol = CASTLING_ROOK_TARGET_COLUMNS[castlingSide];
+                const rook = typeof rookCol === 'number'
+                    ? document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`)
+                    : null;
+                const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
+                if (rook && rookTargetSquare) {
+                    rookTargetSquare.appendChild(rook);
+                    rook.dataset.moved = 'true';
+                }
+                isCastling = castlingSide;
             }
-            isCastling = toCol === 6 ? 'king' : 'queen';
         }
 
         piece.dataset.moved = 'true';
@@ -618,6 +1530,8 @@ document.addEventListener("DOMContentLoaded", () => {
             disambiguation,
             pieceId: piece.id
         };
+
+        updateCastlingRightsAfterMove(moveDetails, capturedRow, capturedCol);
 
         if (pieceType === 'pawn' && (toRow === 0 || toRow === 7)) {
             pendingPromotion = { piece, moveDetails };
@@ -701,15 +1615,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 break;
             case 'king':
                 addKingMoves(moves, row, col, color);
-                if (!JSON.parse(piece.dataset.moved)) { // Check if the king can move
-                    // Castling to the right
-                    if (canCastle(color, row, col, 1)) {
-                        moves.push([row, col + 2]); // Add the move two squares to the right
-                        }
-                        // Castling to the left
-                    if (canCastle(color, row, col, -1)) {
-                    moves.push([row, col - 2]); // Add the move two squares to the left
-                    }
+                if (!JSON.parse(piece.dataset.moved)) {
+                    const castlingMoves = getCastlingMoves(color, row, col);
+                    castlingMoves.forEach(move => moves.push(move));
                 }
                 break;
             }
@@ -841,13 +1749,25 @@ document.addEventListener("DOMContentLoaded", () => {
             board[captureRow][captureCol] = null;
         }
 
-        if (movingPiece.type === 'king' && Math.abs(toCol - fromCol) === 2) {
-            const rookFromCol = toCol === 6 ? 7 : 0;
-            const rookToCol = toCol === 6 ? 5 : 3;
-            const rookPiece = board[fromRow][rookFromCol];
-            if (rookPiece) {
-                board[fromRow][rookFromCol] = null;
-                board[fromRow][rookToCol] = { ...rookPiece };
+        if (movingPiece.type === 'king') {
+            const castlingSide = getCastlingSideForMove(movingPiece.color, toCol);
+            if (castlingSide) {
+                const sideKey = castlingSide === 'king' ? 'kingSide' : 'queenSide';
+                const rookInfo = castlingRookColumns[movingPiece.color] || {};
+                const rookFromCol = rookInfo[sideKey];
+                const rookTargetCol = CASTLING_ROOK_TARGET_COLUMNS[castlingSide];
+
+                if (
+                    typeof rookFromCol === 'number' &&
+                    typeof rookTargetCol === 'number' &&
+                    board[fromRow]
+                ) {
+                    const rookPiece = board[fromRow][rookFromCol];
+                    if (rookPiece) {
+                        board[fromRow][rookFromCol] = null;
+                        board[fromRow][rookTargetCol] = { ...rookPiece };
+                    }
+                }
             }
         }
 
@@ -973,6 +1893,8 @@ document.addEventListener("DOMContentLoaded", () => {
         let isCapture = false;
         let capturedPieceType = null;
         let capturedPieceColor = null;
+        let capturedRow = null;
+        let capturedCol = null;
         let isEnPassant = false;
         let isCastling = null;
 
@@ -993,6 +1915,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 lastMove.toRow === fromRow &&
                 lastMove.toCol === toCol
             ) {
+                const enemyParent = enemyPawn.parentElement;
+                if (enemyParent) {
+                    capturedRow = parseInt(enemyParent.dataset.row, 10);
+                    capturedCol = parseInt(enemyParent.dataset.col, 10);
+                }
                 capturedPieceType = enemyPawn.dataset.type;
                 capturedPieceColor = enemyPawn.dataset.color;
                 isCapture = true;
@@ -1003,6 +1930,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let targetPiece = toSquare.querySelector('.piece');
         if (targetPiece) {
+            const targetParent = targetPiece.parentElement;
+            if (targetParent) {
+                capturedRow = parseInt(targetParent.dataset.row, 10);
+                capturedCol = parseInt(targetParent.dataset.col, 10);
+            }
             capturedPieceType = targetPiece.dataset.type;
             capturedPieceColor = targetPiece.dataset.color;
             isCapture = true;
@@ -1011,16 +1943,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
         toSquare.appendChild(piece);
 
-        if (pieceType === 'king' && Math.abs(fromCol - toCol) === 2) {
-            const rookCol = toCol === 6 ? 7 : 0;
-            const rookTargetCol = toCol === 6 ? 5 : 3;
-            const rook = document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`);
-            const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
-            if (rook && rookTargetSquare) {
-                rookTargetSquare.appendChild(rook);
-                rook.dataset.moved = 'true';
+        if (pieceType === 'king') {
+            const castlingSide = getCastlingSideForMove(color, toCol);
+            if (castlingSide) {
+                const sideKey = castlingSide === 'king' ? 'kingSide' : 'queenSide';
+                const rookCol = castlingRookColumns[color][sideKey];
+                const rookTargetCol = CASTLING_ROOK_TARGET_COLUMNS[castlingSide];
+                const rook = typeof rookCol === 'number'
+                    ? document.querySelector(`[data-row="${fromRow}"][data-col="${rookCol}"] .piece`)
+                    : null;
+                const rookTargetSquare = document.querySelector(`[data-row="${fromRow}"][data-col="${rookTargetCol}"]`);
+                if (rook && rookTargetSquare) {
+                    rookTargetSquare.appendChild(rook);
+                    rook.dataset.moved = 'true';
+                }
+                isCastling = castlingSide;
             }
-            isCastling = toCol === 6 ? 'king' : 'queen';
         }
 
         piece.dataset.moved = 'true';
@@ -1050,6 +1988,8 @@ document.addEventListener("DOMContentLoaded", () => {
             disambiguation,
             pieceId: piece.id
         };
+
+        updateCastlingRightsAfterMove(moveDetails, capturedRow, capturedCol);
 
         finalizeMove(moveDetails);
     };
@@ -1152,12 +2092,22 @@ document.addEventListener("DOMContentLoaded", () => {
             turn,
             fullmoveNumber,
             lastMove: lastMove ? { ...lastMove } : null,
-            gameOver
+            gameOver,
+            castlingRightsState: JSON.parse(JSON.stringify(castlingRightsState)),
+            castlingRookColumns: JSON.parse(JSON.stringify(castlingRookColumns)),
+            kingHomeRows: { ...kingHomeRows }
         };
     };
 
     const renderState = (state) => {
         createBoard(state.board);
+        castlingRightsState = state.castlingRightsState
+            ? JSON.parse(JSON.stringify(state.castlingRightsState))
+            : createEmptyCastlingRights();
+        castlingRookColumns = state.castlingRookColumns
+            ? JSON.parse(JSON.stringify(state.castlingRookColumns))
+            : createEmptyCastlingRookColumns();
+        kingHomeRows = state.kingHomeRows ? { ...state.kingHomeRows } : { w: 7, b: 0 };
         turn = state.turn;
         fullmoveNumber = state.fullmoveNumber;
         lastMove = state.lastMove ? { ...state.lastMove } : null;
@@ -1339,22 +2289,57 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const getCastlingRights = () => {
-        let rights = '';
-        const wk = document.querySelector('[data-type="king"][data-color="w"]');
-        const bk = document.querySelector('[data-type="king"][data-color="b"]');
-        if (wk && wk.dataset.moved === 'false') {
-            const wrh = document.querySelector('[data-row="7"][data-col="7"] .piece');
-            const wra = document.querySelector('[data-row="7"][data-col="0"] .piece');
-            if (wrh && wrh.dataset.type === 'rook' && wrh.dataset.moved === 'false') rights += 'K';
-            if (wra && wra.dataset.type === 'rook' && wra.dataset.moved === 'false') rights += 'Q';
-        }
-        if (bk && bk.dataset.moved === 'false') {
-            const brh = document.querySelector('[data-row="0"][data-col="7"] .piece');
-            const bra = document.querySelector('[data-row="0"][data-col="0"] .piece');
-            if (brh && brh.dataset.type === 'rook' && brh.dataset.moved === 'false') rights += 'k';
-            if (bra && bra.dataset.type === 'rook' && bra.dataset.moved === 'false') rights += 'q';
-        }
-        return rights || '-';
+        const whiteRights = [];
+        const blackRights = [];
+
+        const appendRight = (color, sideKey) => {
+            if (!castlingRightsState[color] || !castlingRightsState[color][sideKey]) {
+                return;
+            }
+
+            const rookColumns = castlingRookColumns[color] || {};
+            const rookCol = rookColumns[sideKey];
+            if (typeof rookCol !== 'number' || rookCol < 0 || rookCol > 7) {
+                return;
+            }
+
+            const homeRow = getHomeRow(color);
+            const rookElement = document.querySelector(`[data-row="${homeRow}"][data-col="${rookCol}"] .piece`);
+            if (!rookElement || rookElement.dataset.type !== 'rook' || rookElement.dataset.color !== color) {
+                return;
+            }
+
+            const fileLetter = fileLetters[rookCol];
+            if (!fileLetter) {
+                return;
+            }
+
+            if (color === 'w') {
+                if (sideKey === 'kingSide' && rookCol === 7) {
+                    whiteRights.push('K');
+                } else if (sideKey === 'queenSide' && rookCol === 0) {
+                    whiteRights.push('Q');
+                } else {
+                    whiteRights.push(fileLetter.toUpperCase());
+                }
+            } else if (color === 'b') {
+                if (sideKey === 'kingSide' && rookCol === 7) {
+                    blackRights.push('k');
+                } else if (sideKey === 'queenSide' && rookCol === 0) {
+                    blackRights.push('q');
+                } else {
+                    blackRights.push(fileLetter);
+                }
+            }
+        };
+
+        appendRight('w', 'kingSide');
+        appendRight('w', 'queenSide');
+        appendRight('b', 'kingSide');
+        appendRight('b', 'queenSide');
+
+        const rights = [...whiteRights, ...blackRights];
+        return rights.length ? rights.join('') : '-';
     };
 
     const getEnPassantSquare = () => {
@@ -1556,34 +2541,86 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     };
-    const canCastle = (color, row, col, direction) => {
-        const rookCol = direction === 1 ? 7 : 0; // Right rook or left rook
-        const step = direction === 1 ? 1 : -1;
-        let emptyCheckCol = col + step;
-
-        // Check if the rook has moved or does not exist
-        const rook = document.querySelector(`[data-row="${row}"][data-col="${rookCol}"] .piece`);
-        if (!rook || rook.dataset.type !== 'rook' || JSON.parse(rook.dataset.moved)) {
+    const getCastlingMoves = (color, row, col) => {
+        const moves = [];
+        if (canCastle(color, row, col, 'king')) {
+            moves.push([row, CASTLING_KING_TARGET_COLUMNS.king]);
+        }
+        if (canCastle(color, row, col, 'queen')) {
+            moves.push([row, CASTLING_KING_TARGET_COLUMNS.queen]);
+        }
+        return moves;
+    };
+    const canCastle = (color, row, col, side) => {
+        const sideKey = side === 'king' ? 'kingSide' : 'queenSide';
+        if (!castlingRightsState[color] || !castlingRightsState[color][sideKey]) {
+            return false;
+        }
+        const rookCol = castlingRookColumns[color][sideKey];
+        if (rookCol === null || rookCol === undefined) {
             return false;
         }
 
-        // Check if all squares between the king and rook are empty
-        while (emptyCheckCol !== rookCol) {
-            if (document.querySelector(`[data-row="${row}"][data-col="${emptyCheckCol}"] .piece`)) {
+        if (row !== getHomeRow(color)) {
+            return false;
+        }
+
+        const kingSquare = document.querySelector(`[data-row="${row}"][data-col="${col}"] .piece`);
+        if (!kingSquare || kingSquare.dataset.type !== 'king' || kingSquare.dataset.color !== color) {
+            return false;
+        }
+        if (kingSquare.dataset.moved === 'true') {
+            return false;
+        }
+
+        const rookSquare = document.querySelector(`[data-row="${row}"][data-col="${rookCol}"] .piece`);
+        if (!rookSquare || rookSquare.dataset.type !== 'rook' || rookSquare.dataset.color !== color) {
+            return false;
+        }
+        if (rookSquare.dataset.moved === 'true') {
+            return false;
+        }
+
+        const kingTargetCol = CASTLING_KING_TARGET_COLUMNS[side];
+        const rookTargetCol = CASTLING_ROOK_TARGET_COLUMNS[side];
+
+        const step = kingTargetCol > col ? 1 : -1;
+        for (let c = col + step; c !== kingTargetCol + step; c += step) {
+            if (c === rookCol) {
+                continue;
+            }
+            const occupant = document.querySelector(`[data-row="${row}"][data-col="${c}"] .piece`);
+            if (occupant) {
                 return false;
             }
-            emptyCheckCol += step;
         }
 
-        // Check if the king is in check, or if it moves through check
-        for (let i = 0; i <= 2; i++) {
-            let tempCol = col + (i * step);
-            if (isSquareAttacked(createBoardCopy(), row, tempCol, color)) {
-                return false; // King cannot move through or into check
+        const rookStep = rookTargetCol > rookCol ? 1 : -1;
+        for (let c = rookCol + rookStep; c !== rookTargetCol + rookStep; c += rookStep) {
+            if (c === col) {
+                continue;
+            }
+            const occupant = document.querySelector(`[data-row="${row}"][data-col="${c}"] .piece`);
+            if (occupant) {
+                return false;
             }
         }
 
-        return true; // Castling is allowed
+        const boardCopy = createBoardCopy();
+        if (isSquareAttacked(boardCopy, row, col, color)) {
+            return false;
+        }
+
+        let fromColSim = col;
+        for (let c = col + step; c !== kingTargetCol + step; c += step) {
+            makeMoveOnBoardCopy(boardCopy, null, row, fromColSim, row, c);
+            fromColSim = c;
+            if (isSquareAttacked(boardCopy, row, fromColSim, color)) {
+                return false;
+            }
+        }
+
+        return true;
     };
     const clearCheckHighlights = () => {
         document.querySelectorAll('.check').forEach(square => square.classList.remove('check'));
@@ -1707,10 +2744,9 @@ document.addEventListener("DOMContentLoaded", () => {
     initializeCustomMixDefaults();
     updateCustomMixVisibility();
 
-    createBoard();
-    historyStates.push(captureDetailedState());
-    updateMoveHistoryUI();
+    renderPiecePalette();
+    updateCustomSetupButtonVisibility();
+    resetGame();
     initStockfish();
-    evaluateBoard();
     toggleBotSelection();
 });
