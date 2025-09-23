@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resetCustomBoardButton = document.getElementById('resetCustomBoard');
     const enterCustomEditorButton = document.getElementById('enterCustomEditor');
     const applyCustomSetupButton = document.getElementById('applyCustomSetup');
+    const stockfishStatusElement = document.getElementById('stockfishStatus');
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
@@ -47,6 +48,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let botDifficulty = botDifficultySelect.value;
     let fullmoveNumber = 1;
     let engine;
+    let stockfishAvailable = null;
+    let stockfishUnavailableMessage = '';
     let gameOver = false;
     const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
     const moveHistoryList = document.getElementById('moveHistoryList');
@@ -93,7 +96,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     botDifficultySelect.addEventListener('change', () => {
-        botDifficulty = botDifficultySelect.value;
+        const selectedValue = botDifficultySelect.value;
+        if (selectedValue === 'stockfish' && stockfishAvailable === false) {
+            botDifficultySelect.value = botDifficulty;
+            const message = stockfishUnavailableMessage || 'The Stockfish engine is not available in this browser.';
+            updateStockfishStatus(message, { type: 'error' });
+            return;
+        }
+
+        botDifficulty = selectedValue;
         updateCustomMixVisibility();
         evaluateBoard();
     });
@@ -386,10 +397,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function getActiveCustomMixEntries() {
         const summary = getCustomMixSummary();
-        if (summary.valid) {
-            return summary.entries;
+        const entries = summary.valid ? summary.entries : lastValidCustomMix;
+        if (!entries) {
+            return [];
         }
-        return lastValidCustomMix;
+
+        if (stockfishAvailable === false) {
+            return entries.filter(entry => entry.id !== 'stockfish');
+        }
+
+        return entries;
     }
 
     function chooseBotFromMix(entries) {
@@ -420,6 +437,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const shouldShow = gameMode === 'onePlayer' && botDifficulty === 'custom';
         customMixContainer.style.display = shouldShow ? 'block' : 'none';
+    }
+
+    function updateStockfishStatus(message = '', options = {}) {
+        if (!stockfishStatusElement) {
+            return;
+        }
+
+        stockfishStatusElement.textContent = message;
+        stockfishStatusElement.style.display = message ? 'block' : 'none';
+
+        if (message && options.type === 'error') {
+            stockfishStatusElement.classList.add('stockfish-status--error');
+        } else {
+            stockfishStatusElement.classList.remove('stockfish-status--error');
+        }
+    }
+
+    function removeStockfishFromLastValidMix() {
+        if (!Array.isArray(lastValidCustomMix) || !lastValidCustomMix.length) {
+            return;
+        }
+        lastValidCustomMix = lastValidCustomMix.filter(entry => entry.id !== 'stockfish');
     }
 
     function updateCustomSetupVisibility() {
@@ -1768,7 +1807,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const initStockfish = () => {
-        engine = new Worker('stockfish.js');
+        const support = getStockfishSupportStatus();
+        if (!support.available) {
+            setStockfishAvailability(false, support.message);
+            return;
+        }
+
+        try {
+            engine = new Worker('stockfish.js');
+        } catch (error) {
+            console.error('Failed to initialize the Stockfish worker.', error);
+            setStockfishAvailability(false, 'Stockfish could not be started in this browser.');
+            return;
+        }
+
         engine.onmessage = (e) => {
             const line = e.data;
             const scoreMatch = line.match(/score (cp|mate) (-?\\d+)/);
@@ -1786,6 +1838,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 engine.bestMoveCallback = null;
             }
         };
+
+        engine.onerror = (event) => {
+            console.error('Stockfish worker error:', event && event.message ? event.message : event);
+            setStockfishAvailability(false, 'Stockfish encountered an error and has been disabled.');
+        };
+
+        setStockfishAvailability(true);
         updateEngineChess960Option();
     };
 
@@ -1800,6 +1859,14 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const performStockfishBotMove = () => {
+        if (!engine || stockfishAvailable === false) {
+            if (stockfishUnavailableMessage) {
+                updateStockfishStatus(stockfishUnavailableMessage, { type: 'error' });
+            }
+            performRandomBotMove();
+            return;
+        }
+
         requestStockfish(best => {
             if (!best) return;
             const fromFile = best[0];
@@ -2512,6 +2579,74 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         requestStockfish();
+    };
+
+    function getStockfishSupportStatus() {
+        if (typeof Worker === 'undefined') {
+            return {
+                available: false,
+                message: 'Stockfish requires Web Worker support, which is not available in this browser.'
+            };
+        }
+
+        if (typeof SharedArrayBuffer === 'undefined' || typeof Atomics === 'undefined') {
+            return {
+                available: false,
+                message: 'Stockfish requires SharedArrayBuffer support. Serve this page with Cross-Origin isolation headers (COOP and COEP) or use a compatible browser.'
+            };
+        }
+
+        return { available: true, message: '' };
+    }
+
+    const setStockfishAvailability = (available, message = '') => {
+        stockfishAvailable = available;
+        stockfishUnavailableMessage = available ? '' : (message || 'The Stockfish engine is not available in this browser.');
+
+        if (available === false && engine) {
+            if (engine.bestMoveCallback) {
+                engine.bestMoveCallback = null;
+            }
+            try {
+                engine.terminate();
+            } catch (err) {
+                console.warn('Failed to terminate Stockfish worker.', err);
+            }
+            engine = null;
+        }
+
+        const stockfishOption = botDifficultySelect ? botDifficultySelect.querySelector('option[value="stockfish"]') : null;
+        if (stockfishOption) {
+            stockfishOption.disabled = available === false;
+        }
+
+        const stockfishControls = customMixControls.get('stockfish');
+        if (stockfishControls) {
+            stockfishControls.checkbox.disabled = available === false;
+            if (available === false) {
+                if (customMixState.stockfish && customMixState.stockfish.selected) {
+                    setCustomMixSelected('stockfish', false);
+                }
+                stockfishControls.slider.disabled = true;
+                stockfishControls.number.disabled = true;
+            } else {
+                stockfishControls.slider.disabled = !customMixState.stockfish.selected;
+                stockfishControls.number.disabled = !customMixState.stockfish.selected;
+            }
+        }
+
+        if (available === false) {
+            if (botDifficulty === 'stockfish' && botDifficultySelect) {
+                botDifficulty = 'random';
+                botDifficultySelect.value = 'random';
+            }
+            removeStockfishFromLastValidMix();
+            updateStockfishStatus(stockfishUnavailableMessage, { type: 'error' });
+            updateCustomMixVisibility();
+            evaluateBoard();
+        } else if (available === true) {
+            updateStockfishStatus('');
+        }
     };
 
     const filterMoves = (moves) => {
