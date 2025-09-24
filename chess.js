@@ -36,6 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const cancelCustomSetupButton = document.getElementById('cancelCustomSetup');
     const applyCustomSetupButton = document.getElementById('applyCustomSetup');
     const closeCustomSetupButton = document.getElementById('closeCustomSetup');
+    const zeroPlayerControls = document.getElementById('zeroPlayerControls');
+    const zeroPlayerStartButton = document.getElementById('startZeroPlayerButton');
+    const zeroPlayerStopButton = document.getElementById('stopZeroPlayerButton');
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
@@ -96,6 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let engine;
     let gameOver = false;
     let pendingBotMoveTimeout = null;
+    let zeroPlayerPaused = false;
     const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
     const moveHistoryList = document.getElementById('moveHistoryList');
     let moveHistoryEntries = [];
@@ -368,15 +372,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         gameOver = true;
         cancelScheduledBotMove();
+        updateZeroPlayerControlsState();
         const message = DRAW_MESSAGES[reason] || 'Draw.';
         alert(`Game over! ${message}`);
     }
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
+        zeroPlayerPaused = false;
         cancelScheduledBotMove();
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
+        updateZeroPlayerControlsState();
         resetGame(); // Reset the game when switching modes
     });
 
@@ -410,6 +417,32 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     });
+
+    if (zeroPlayerStartButton) {
+        zeroPlayerStartButton.addEventListener('click', () => {
+            if (gameMode !== 'zeroPlayer' || gameOver || !zeroPlayerPaused) {
+                return;
+            }
+            zeroPlayerPaused = false;
+            updateZeroPlayerControlsState();
+            scheduleBotMoveIfNeeded({ force: true });
+        });
+    }
+
+    if (zeroPlayerStopButton) {
+        zeroPlayerStopButton.addEventListener('click', () => {
+            if (gameMode !== 'zeroPlayer' || zeroPlayerPaused) {
+                return;
+            }
+            zeroPlayerPaused = true;
+            cancelScheduledBotMove();
+            if (engine) {
+                engine.postMessage('stop');
+                engine.bestMoveCallback = null;
+            }
+            updateZeroPlayerControlsState();
+        });
+    }
 
     function getSelectedCustomMixCount(color) {
         const state = customMixState[color];
@@ -800,6 +833,27 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             group.style.display = activeColors.includes(color) ? 'flex' : 'none';
         });
+    }
+
+    function isZeroPlayerAutomationPaused() {
+        return gameMode === 'zeroPlayer' && zeroPlayerPaused;
+    }
+
+    function updateZeroPlayerControlsState() {
+        if (!zeroPlayerControls) {
+            return;
+        }
+        const isZeroPlayer = gameMode === 'zeroPlayer';
+        zeroPlayerControls.style.display = isZeroPlayer ? 'flex' : 'none';
+        if (!isZeroPlayer) {
+            return;
+        }
+        if (zeroPlayerStartButton) {
+            zeroPlayerStartButton.disabled = !zeroPlayerPaused || gameOver;
+        }
+        if (zeroPlayerStopButton) {
+            zeroPlayerStopButton.disabled = zeroPlayerPaused || gameOver;
+        }
     }
 
     function isStockfishEvaluationEnabled() {
@@ -1239,6 +1293,7 @@ document.addEventListener("DOMContentLoaded", () => {
         historyStates.push(captureDetailedState());
         updateMoveHistoryUI();
         evaluateBoard();
+        updateZeroPlayerControlsState();
         scheduleBotMoveIfNeeded({ force: true });
     }
 
@@ -2048,7 +2103,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            if (turn !== color || !isColorBotControlled(color) || gameOver) {
+            if (turn !== color || !isColorBotControlled(color) || gameOver || isZeroPlayerAutomationPaused()) {
                 return;
             }
 
@@ -2080,6 +2135,7 @@ document.addEventListener("DOMContentLoaded", () => {
             gameOver = true;
             const winner = color === 'w' ? 'Black' : 'White';
             alert(`Game over! ${winner} wins by checkmate.`);
+            updateZeroPlayerControlsState();
         } else {
             declareDraw('stalemate');
         }
@@ -2260,6 +2316,10 @@ document.addEventListener("DOMContentLoaded", () => {
             pendingBotMoveTimeout = null;
         }
 
+        if (isZeroPlayerAutomationPaused()) {
+            return;
+        }
+
         if (!isColorBotControlled(turn) || gameOver || pendingPromotion) {
             return;
         }
@@ -2276,6 +2336,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (!isColorBotControlled(color)) {
+            return;
+        }
+
+        if (isZeroPlayerAutomationPaused()) {
             return;
         }
 
@@ -3134,6 +3198,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const displayCheckmatePopup = () => {
         gameOver = true;
         cancelScheduledBotMove();
+        updateZeroPlayerControlsState();
         if (document.querySelector('.checkmate-popup')) {
             return;
         }
