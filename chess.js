@@ -99,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let engine;
     let gameOver = false;
     let pendingBotMoveTimeout = null;
-    let zeroPlayerPaused = false;
+    let zeroPlayerPaused = true;
     const promMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
     const moveHistoryList = document.getElementById('moveHistoryList');
     let moveHistoryEntries = [];
@@ -379,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
-        zeroPlayerPaused = false;
+        zeroPlayerPaused = gameMode === 'zeroPlayer';
         cancelScheduledBotMove();
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
