@@ -41,6 +41,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const zeroPlayerStopButton = document.getElementById('stopZeroPlayerButton');
     const playerColorSelect = document.getElementById('playerColorSelect');
     const playerColorGroup = document.getElementById('playerColorGroup');
+    const boardFlipModeSelect = document.getElementById('boardFlipModeSelect');
+    const boardWithCaptures = document.querySelector('.board-with-captures');
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
@@ -93,6 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let gameMode = 'twoPlayer'; // Default game mode
     let playerColor = playerColorSelect ? (playerColorSelect.value === 'b' ? 'b' : 'w') : 'w';
     let boardOrientation = 'w';
+    let boardFlipMode = boardFlipModeSelect ? (boardFlipModeSelect.value === 'entire' ? 'entire' : 'pieces') : 'pieces';
     const botDifficulty = {
         w: botSelectors.w ? botSelectors.w.value : 'random',
         b: botSelectors.b ? botSelectors.b.value : 'random'
@@ -438,6 +441,17 @@ document.addEventListener("DOMContentLoaded", () => {
             updateCustomMixVisibility();
             evaluateBoard();
             resetGame();
+        });
+    }
+
+    if (boardFlipModeSelect) {
+        boardFlipModeSelect.addEventListener('change', () => {
+            const selectedMode = boardFlipModeSelect.value === 'entire' ? 'entire' : 'pieces';
+            if (selectedMode === boardFlipMode) {
+                return;
+            }
+            boardFlipMode = selectedMode;
+            updateBoardOrientationState({ force: true });
         });
     }
 
@@ -818,18 +832,50 @@ document.addEventListener("DOMContentLoaded", () => {
         return entries[entries.length - 1].id;
     }
 
+    function shouldFlipOrientationWithTurn() {
+        if (boardFlipMode === 'pieces') {
+            if (gameMode === 'twoPlayer') {
+                return true;
+            }
+            if (gameMode === 'zeroPlayer') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function determineBoardOrientation() {
+        if (boardFlipMode === 'entire') {
+            return 'w';
+        }
+        if (shouldFlipOrientationWithTurn()) {
+            return turn;
+        }
         if (gameMode === 'onePlayer' && playerColor === 'b') {
             return 'b';
         }
         return 'w';
     }
 
-    function updateBoardOrientationState() {
+    function updateBoardOrientationState(options = {}) {
+        const { preserveState = true, force = false } = options;
         const desiredOrientation = determineBoardOrientation();
-        if (boardOrientation !== desiredOrientation) {
-            boardOrientation = desiredOrientation;
+        const orientationChanged = boardOrientation !== desiredOrientation;
+        boardOrientation = desiredOrientation;
+        if (preserveState && (orientationChanged || force)) {
+            const snapshot = captureDetailedState();
+            renderState(snapshot, { skipOrientationUpdate: true });
         }
+        updateBoardRotationClasses();
+    }
+
+    function updateBoardRotationClasses() {
+        if (!boardWithCaptures) {
+            return;
+        }
+        const shouldFlipEntireBoard = boardFlipMode === 'entire' && turn === 'b';
+        boardWithCaptures.classList.toggle('entire-board-mode', boardFlipMode === 'entire');
+        boardWithCaptures.classList.toggle('entire-board-flipped', shouldFlipEntireBoard);
     }
 
     function updatePlayerColorVisibility() {
@@ -1308,7 +1354,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function applySetupToGame(setup) {
         cancelScheduledBotMove();
-        updateBoardOrientationState();
+        turn = setup.turn === 'b' ? 'b' : 'w';
+        updateBoardOrientationState({ preserveState: false, force: true });
         currentInitialSetup = cloneSetup(setup);
         const promotionUI = document.querySelector('.promotion-ui');
         if (promotionUI) {
@@ -1322,7 +1369,6 @@ document.addEventListener("DOMContentLoaded", () => {
         initializeCastlingTracking(board, setup.castling || '-');
 
         selectedPiece = null;
-        turn = setup.turn === 'b' ? 'b' : 'w';
         fullmoveNumber = Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1;
         lastMove = inferLastMoveFromEnPassant(setup.enPassant, turn);
         resetDrawTracking(Number.isFinite(setup.halfmove) && setup.halfmove >= 0 ? setup.halfmove : 0);
@@ -1768,7 +1814,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Define resetGame function if not already defined
     const resetGame = () => {
         const setup = getSetupForCurrentGameType();
-        updateBoardOrientationState();
         applySetupToGame(setup);
     };
     function createBoard(boardState = null) {
@@ -2646,16 +2691,12 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     };
 
-    const renderState = (state) => {
-        createBoard(state.board);
-        castlingRightsState = state.castlingRightsState
-            ? JSON.parse(JSON.stringify(state.castlingRightsState))
-            : createEmptyCastlingRights();
-        castlingRookColumns = state.castlingRookColumns
-            ? JSON.parse(JSON.stringify(state.castlingRookColumns))
-            : createEmptyCastlingRookColumns();
-        kingHomeRows = state.kingHomeRows ? { ...state.kingHomeRows } : { w: 7, b: 0 };
-        turn = state.turn;
+    const renderState = (state, options = {}) => {
+        if (!state) {
+            return;
+        }
+        const { skipOrientationUpdate = false } = options;
+        turn = state.turn === 'b' ? 'b' : 'w';
         fullmoveNumber = state.fullmoveNumber;
         halfmoveClock = typeof state.halfmoveClock === 'number' && state.halfmoveClock >= 0
             ? state.halfmoveClock
@@ -2666,6 +2707,19 @@ document.addEventListener("DOMContentLoaded", () => {
         selectedPiece = null;
         capturedPiecesState = cloneCapturedPiecesState(state.capturedPieces);
         positionCounts = clonePositionCounts(state.positionCounts);
+        castlingRightsState = state.castlingRightsState
+            ? JSON.parse(JSON.stringify(state.castlingRightsState))
+            : createEmptyCastlingRights();
+        castlingRookColumns = state.castlingRookColumns
+            ? JSON.parse(JSON.stringify(state.castlingRookColumns))
+            : createEmptyCastlingRookColumns();
+        kingHomeRows = state.kingHomeRows ? { ...state.kingHomeRows } : { w: 7, b: 0 };
+
+        if (!skipOrientationUpdate) {
+            updateBoardOrientationState({ preserveState: false, force: true });
+        }
+
+        createBoard(state.board);
         renderAllCapturedPieces();
         checkForCheck();
         evaluateBoard();
@@ -3282,6 +3336,7 @@ document.addEventListener("DOMContentLoaded", () => {
             fullmoveNumber++;
         }
 
+        updateBoardOrientationState();
         scheduleBotMoveIfNeeded();
     };
 
