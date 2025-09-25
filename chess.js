@@ -92,6 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastMove = null; // To keep track of the last move
     let gameMode = 'twoPlayer'; // Default game mode
     let playerColor = playerColorSelect ? (playerColorSelect.value === 'b' ? 'b' : 'w') : 'w';
+    let boardOrientation = 'w';
     const botDifficulty = {
         w: botSelectors.w ? botSelectors.w.value : 'random',
         b: botSelectors.b ? botSelectors.b.value : 'random'
@@ -817,6 +818,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return entries[entries.length - 1].id;
     }
 
+    function determineBoardOrientation() {
+        if (gameMode === 'onePlayer' && playerColor === 'b') {
+            return 'b';
+        }
+        return 'w';
+    }
+
+    function updateBoardOrientationState() {
+        const desiredOrientation = determineBoardOrientation();
+        if (boardOrientation !== desiredOrientation) {
+            boardOrientation = desiredOrientation;
+        }
+    }
+
     function updatePlayerColorVisibility() {
         if (!playerColorGroup) {
             return;
@@ -1293,6 +1308,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function applySetupToGame(setup) {
         cancelScheduledBotMove();
+        updateBoardOrientationState();
         currentInitialSetup = cloneSetup(setup);
         const promotionUI = document.querySelector('.promotion-ui');
         if (promotionUI) {
@@ -1752,6 +1768,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Define resetGame function if not already defined
     const resetGame = () => {
         const setup = getSetupForCurrentGameType();
+        updateBoardOrientationState();
         applySetupToGame(setup);
     };
     function createBoard(boardState = null) {
@@ -1764,6 +1781,12 @@ document.addEventListener("DOMContentLoaded", () => {
         chessboard.style.height = "560px";
         chessboard.style.border = "2px solid black";
 
+        const orientation = boardOrientation === 'b' ? 'b' : 'w';
+        const rowOrder = Array.from({ length: 8 }, (_, index) => orientation === 'b' ? 7 - index : index);
+        const colOrder = Array.from({ length: 8 }, (_, index) => orientation === 'b' ? 7 - index : index);
+        const fileLabelRow = orientation === 'b' ? 0 : 7;
+        const rankLabelCol = orientation === 'b' ? 7 : 0;
+
         const initialBoard = [
             ["rook-b", "knight-b", "bishop-b", "queen-b", "king-b", "bishop-b", "knight-b", "rook-b"],
             ["pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b", "pawn-b"],
@@ -1775,8 +1798,8 @@ document.addEventListener("DOMContentLoaded", () => {
             ["rook-w", "knight-w", "bishop-w", "queen-w", "king-w", "bishop-w", "knight-w", "rook-w"]
         ];
 
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
+        rowOrder.forEach(row => {
+            colOrder.forEach(col => {
                 const square = document.createElement('div');
                 square.style.width = "70px";
                 square.style.height = "70px";
@@ -1815,13 +1838,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     square.appendChild(piece);
                 }
 
-                if (row === 7) {
+                if (row === fileLabelRow) {
                     const fileLabel = document.createElement('span');
                     fileLabel.className = 'file-label';
                     fileLabel.textContent = fileLetters[col];
                     square.appendChild(fileLabel);
                 }
-                if (col === 0) {
+                if (col === rankLabelCol) {
                     const rankLabel = document.createElement('span');
                     rankLabel.className = 'rank-label';
                     rankLabel.textContent = 8 - row;
@@ -1830,8 +1853,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 square.addEventListener('click', handleSquareClick);
                 chessboard.appendChild(square);
-            }
-        }
+            });
+        });
     }
     const handleSquareClick = (event) => {
         if (gameOver || pendingPromotion) return;
