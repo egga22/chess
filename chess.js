@@ -832,29 +832,21 @@ document.addEventListener("DOMContentLoaded", () => {
         return entries[entries.length - 1].id;
     }
 
-    function shouldFlipOrientationWithTurn() {
-        if (boardFlipMode === 'pieces') {
-            if (gameMode === 'twoPlayer') {
-                return true;
-            }
-            if (gameMode === 'zeroPlayer') {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function determineBoardOrientation() {
-        if (boardFlipMode === 'entire') {
-            return 'w';
-        }
-        if (shouldFlipOrientationWithTurn()) {
+    function getPerspectiveOrientation() {
+        if (gameMode === 'twoPlayer' || gameMode === 'zeroPlayer') {
             return turn;
         }
         if (gameMode === 'onePlayer' && playerColor === 'b') {
             return 'b';
         }
         return 'w';
+    }
+
+    function determineBoardOrientation() {
+        if (boardFlipMode === 'pieces') {
+            return 'w';
+        }
+        return getPerspectiveOrientation();
     }
 
     function updateBoardOrientationState(options = {}) {
@@ -873,9 +865,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!boardWithCaptures) {
             return;
         }
-        const shouldFlipEntireBoard = boardFlipMode === 'entire' && turn === 'b';
+        const perspectiveOrientation = getPerspectiveOrientation();
+        const shouldRotatePieces = boardFlipMode === 'pieces' && perspectiveOrientation === 'b';
         boardWithCaptures.classList.toggle('entire-board-mode', boardFlipMode === 'entire');
-        boardWithCaptures.classList.toggle('entire-board-flipped', shouldFlipEntireBoard);
+        boardWithCaptures.classList.remove('entire-board-flipped');
+        boardWithCaptures.classList.toggle('pieces-rotated', shouldRotatePieces);
     }
 
     function updatePlayerColorVisibility() {

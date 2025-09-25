@@ -149,6 +149,7 @@ body {
 .piece {
     width: 60px;
     height: 60px;
+    transition: transform 0.3s ease;
 }
 
 .move-dot {
@@ -220,6 +221,10 @@ body {
 }
 
 #boardArea .board-with-captures.entire-board-flipped {
+    transform: rotate(180deg);
+}
+
+#boardArea .board-with-captures.pieces-rotated .piece {
     transform: rotate(180deg);
 }
 
