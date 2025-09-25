@@ -210,6 +210,19 @@ body {
     gap: 10px;
 }
 
+#boardArea .board-with-captures {
+    transition: transform 0.3s ease;
+    transform-origin: center;
+}
+
+#boardArea .board-with-captures.entire-board-mode {
+    will-change: transform;
+}
+
+#boardArea .board-with-captures.entire-board-flipped {
+    transform: rotate(180deg);
+}
+
 .captured-pieces {
     display: flex;
     align-items: center;
