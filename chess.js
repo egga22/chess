@@ -39,6 +39,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const zeroPlayerControls = document.getElementById('zeroPlayerControls');
     const zeroPlayerStartButton = document.getElementById('startZeroPlayerButton');
     const zeroPlayerStopButton = document.getElementById('stopZeroPlayerButton');
+    const playerColorSelect = document.getElementById('playerColorSelect');
+    const playerColorGroup = document.getElementById('playerColorGroup');
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },
@@ -89,6 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
     let gameMode = 'twoPlayer'; // Default game mode
+    let playerColor = playerColorSelect ? (playerColorSelect.value === 'b' ? 'b' : 'w') : 'w';
     const botDifficulty = {
         w: botSelectors.w ? botSelectors.w.value : 'random',
         b: botSelectors.b ? botSelectors.b.value : 'random'
@@ -380,7 +383,11 @@ document.addEventListener("DOMContentLoaded", () => {
     gameModeSelect.addEventListener("change", () => {
         gameMode = gameModeSelect.value;
         zeroPlayerPaused = gameMode === 'zeroPlayer';
+        if (playerColorSelect) {
+            playerColor = playerColorSelect.value === 'b' ? 'b' : 'w';
+        }
         cancelScheduledBotMove();
+        updatePlayerColorVisibility();
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
         updateZeroPlayerControlsState();
@@ -417,6 +424,21 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     });
+
+    if (playerColorSelect) {
+        playerColorSelect.addEventListener('change', () => {
+            const selectedColor = playerColorSelect.value === 'b' ? 'b' : 'w';
+            if (selectedColor === playerColor) {
+                return;
+            }
+            playerColor = selectedColor;
+            cancelScheduledBotMove();
+            updateBotSelectionVisibility();
+            updateCustomMixVisibility();
+            evaluateBoard();
+            resetGame();
+        });
+    }
 
     if (zeroPlayerStartButton) {
         zeroPlayerStartButton.addEventListener('click', () => {
@@ -795,9 +817,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return entries[entries.length - 1].id;
     }
 
+    function updatePlayerColorVisibility() {
+        if (!playerColorGroup) {
+            return;
+        }
+        const shouldShow = gameMode === 'onePlayer';
+        playerColorGroup.style.display = shouldShow ? 'flex' : 'none';
+    }
+
     function getBotControlledColors() {
         if (gameMode === 'onePlayer') {
-            return ['b'];
+            return playerColor === 'b' ? ['w'] : ['b'];
         }
         if (gameMode === 'zeroPlayer') {
             return ['w', 'b'];
@@ -3233,6 +3263,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.toggleBotSelection = function() {
+        updatePlayerColorVisibility();
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
     };
@@ -3267,6 +3298,7 @@ document.addEventListener("DOMContentLoaded", () => {
         renderCustomMixOptions(color);
         initializeCustomMixDefaults(color);
     });
+    updatePlayerColorVisibility();
     updateCustomMixVisibility();
     updateBotSelectionVisibility();
 
