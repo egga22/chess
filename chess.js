@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const playerColorSelect = document.getElementById('playerColorSelect');
     const playerColorGroup = document.getElementById('playerColorGroup');
     const boardFlipModeSelect = document.getElementById('boardFlipModeSelect');
+    const boardFlipModeGroup = boardFlipModeSelect ? boardFlipModeSelect.closest('.settings-group') : null;
     const boardWithCaptures = document.querySelector('.board-with-captures');
 
     const botOptions = [
@@ -395,6 +396,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
         updateZeroPlayerControlsState();
+        updateBoardFlipModeVisibility();
         resetGame(); // Reset the game when switching modes
     });
 
@@ -833,11 +835,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function getPerspectiveOrientation() {
-        if (gameMode === 'twoPlayer' || gameMode === 'zeroPlayer') {
+        if (gameMode === 'twoPlayer') {
             return turn;
         }
-        if (gameMode === 'onePlayer' && playerColor === 'b') {
-            return 'b';
+        if (gameMode === 'onePlayer') {
+            return playerColor === 'b' ? 'b' : 'w';
+        }
+        if (gameMode === 'zeroPlayer') {
+            return 'w';
         }
         return 'w';
     }
@@ -878,6 +883,33 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const shouldShow = gameMode === 'onePlayer';
         playerColorGroup.style.display = shouldShow ? 'flex' : 'none';
+    }
+
+    function updateBoardFlipModeVisibility() {
+        if (!boardFlipModeGroup) {
+            return;
+        }
+
+        const isTwoPlayer = gameMode === 'twoPlayer';
+        boardFlipModeGroup.style.display = isTwoPlayer ? 'flex' : 'none';
+
+        if (!isTwoPlayer) {
+            if (boardFlipMode !== 'entire') {
+                boardFlipMode = 'entire';
+                updateBoardOrientationState({ force: true });
+            }
+            return;
+        }
+
+        if (!boardFlipModeSelect) {
+            return;
+        }
+
+        const selectedMode = boardFlipModeSelect.value === 'entire' ? 'entire' : 'pieces';
+        if (selectedMode !== boardFlipMode) {
+            boardFlipMode = selectedMode;
+            updateBoardOrientationState({ force: true });
+        }
     }
 
     function getBotControlledColors() {
@@ -3338,6 +3370,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updatePlayerColorVisibility();
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
+        updateBoardFlipModeVisibility();
     };
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
@@ -3373,6 +3406,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updatePlayerColorVisibility();
     updateCustomMixVisibility();
     updateBotSelectionVisibility();
+    updateBoardFlipModeVisibility();
 
     renderPiecePalette();
     updateCustomSetupButtonVisibility();
