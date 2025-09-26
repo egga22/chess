@@ -44,6 +44,90 @@ document.addEventListener("DOMContentLoaded", () => {
     const boardFlipModeSelect = document.getElementById('boardFlipModeSelect');
     const boardFlipModeGroup = boardFlipModeSelect ? boardFlipModeSelect.closest('.settings-group') : null;
     const boardWithCaptures = document.querySelector('.board-with-captures');
+    const loginButton = document.getElementById('loginButton');
+    const signupButton = document.getElementById('signupButton');
+    const loginModal = document.getElementById('loginModal');
+    const signupModal = document.getElementById('signupModal');
+    const authCloseButtons = document.querySelectorAll('.auth-close-button');
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const pageBody = document.body;
+
+    function openAuthModal(modal) {
+        if (!modal) {
+            return;
+        }
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        pageBody.classList.add('modal-open');
+        const firstInput = modal.querySelector('input');
+        if (firstInput) {
+            firstInput.focus();
+        }
+    }
+
+    function closeAuthModal(modal) {
+        if (!modal) {
+            return;
+        }
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        if (![loginModal, signupModal].some(element => element && !element.classList.contains('hidden'))) {
+            pageBody.classList.remove('modal-open');
+        }
+    }
+
+    function closeAllAuthModals() {
+        [loginModal, signupModal].forEach(modal => closeAuthModal(modal));
+    }
+
+    if (loginButton && loginModal) {
+        loginButton.addEventListener('click', () => openAuthModal(loginModal));
+    }
+
+    if (signupButton && signupModal) {
+        signupButton.addEventListener('click', () => openAuthModal(signupModal));
+    }
+
+    [loginModal, signupModal].forEach(modal => {
+        if (!modal) {
+            return;
+        }
+        modal.addEventListener('click', event => {
+            if (event.target === modal) {
+                closeAuthModal(modal);
+            }
+        });
+    });
+
+    authCloseButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = button.closest('.auth-modal');
+            if (modal) {
+                closeAuthModal(modal);
+            }
+        });
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            closeAllAuthModals();
+        }
+    });
+
+    if (loginForm && loginModal) {
+        loginForm.addEventListener('submit', event => {
+            event.preventDefault();
+            closeAuthModal(loginModal);
+        });
+    }
+
+    if (signupForm && signupModal) {
+        signupForm.addEventListener('submit', event => {
+            event.preventDefault();
+            closeAuthModal(signupModal);
+        });
+    }
 
     const botOptions = [
         { id: 'random', label: 'Random Moves' },

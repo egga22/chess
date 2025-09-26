@@ -7,6 +7,145 @@ body {
     margin: 0;
 }
 
+
+body.modal-open {
+    overflow: hidden;
+}
+
+.top-bar {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 12px 16px 0 16px;
+    box-sizing: border-box;
+}
+
+.auth-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.auth-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: 14px;
+    border-radius: 999px;
+    border: 1px solid #2f80ed;
+    background: #ffffff;
+    color: #2f80ed;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-button.primary {
+    background: #2f80ed;
+    color: #ffffff;
+}
+
+.auth-button:hover,
+.auth-button:focus {
+    background: #1b63c5;
+    color: #ffffff;
+    border-color: #1b63c5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.auth-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.auth-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2100;
+    padding: 20px;
+}
+
+.auth-dialog {
+    background: #ffffff;
+    padding: 24px 28px;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+    width: min(360px, 100%);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-dialog h2 {
+    margin: 0;
+    font-size: 22px;
+    text-align: center;
+}
+
+.auth-dialog form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.auth-dialog label {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.auth-dialog input {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    font-size: 15px;
+}
+
+.auth-dialog input:focus {
+    outline: none;
+    border-color: #2f80ed;
+    box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.15);
+}
+
+.auth-submit-button {
+    padding: 10px 14px;
+    border: none;
+    border-radius: 6px;
+    background: #27ae60;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.auth-submit-button:hover,
+.auth-submit-button:focus {
+    background: #1f8a4d;
+}
+
+.auth-close-button {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666666;
+}
+
+.auth-close-button:hover,
+.auth-close-button:focus {
+    color: #2f80ed;
+}
+
 .settings-container {
     width: 100%;
     padding: 10px 16px;
