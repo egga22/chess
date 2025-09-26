@@ -52,6 +52,267 @@ document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById('loginForm');
     const signupForm = document.getElementById('signupForm');
     const pageBody = document.body;
+    const authButtonsContainer = document.querySelector('.auth-buttons');
+    const authStatus = document.getElementById('authStatus');
+    const authStatusText = document.getElementById('authStatusText');
+    const logoutButton = document.getElementById('logoutButton');
+    const restDbBaseUrlAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbBaseUrl : '';
+    const restDbUsersCollectionAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbUsersCollection : '';
+    const restDbApiKeyAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbApiKey : '';
+    const restDbConfig = {
+        baseUrl: (restDbBaseUrlAttribute || 'https://chess-7deb.restdb.io/rest').trim(),
+        usersCollection: (restDbUsersCollectionAttribute || 'users').trim(),
+        apiKey: (restDbApiKeyAttribute || '68d6f8a9b349a33f8d4b70d8').trim()
+    };
+    const AUTH_STORAGE_KEY = 'chess-auth-user';
+    const REST_DB_NOT_CONFIGURED_ERROR = 'REST_DB_NOT_CONFIGURED';
+    let authenticatedUser = null;
+
+    function showAuthError(form, message) {
+        if (!form) {
+            return;
+        }
+        const errorElement = form.querySelector('.auth-error');
+        if (errorElement) {
+            errorElement.textContent = message || '';
+        }
+    }
+
+    function clearAuthError(form) {
+        showAuthError(form, '');
+    }
+
+    function setFormSubmitting(form, isSubmitting) {
+        if (!form) {
+            return;
+        }
+        const submitButton = form.querySelector('[type="submit"]');
+        if (submitButton) {
+            submitButton.disabled = Boolean(isSubmitting);
+        }
+    }
+
+    function buildRestDbUrl(path) {
+        if (!restDbConfig.baseUrl) {
+            const error = new Error('Authentication service is not configured.');
+            error.code = REST_DB_NOT_CONFIGURED_ERROR;
+            throw error;
+        }
+        const trimmedBase = restDbConfig.baseUrl.replace(/\/+$/, '');
+        const trimmedPath = path ? path.replace(/^\/+/, '') : '';
+        return trimmedPath ? `${trimmedBase}/${trimmedPath}` : trimmedBase;
+    }
+
+    async function restDbFetch(path, options = {}) {
+        let requestUrl;
+        try {
+            requestUrl = buildRestDbUrl(path);
+        } catch (error) {
+            if (error.code === REST_DB_NOT_CONFIGURED_ERROR) {
+                throw error;
+            }
+            throw error;
+        }
+
+        const fetchOptions = Object.assign({}, options);
+        const headers = new Headers(fetchOptions.headers || {});
+        headers.set('x-apikey', restDbConfig.apiKey);
+        if (fetchOptions.body && !headers.has('Content-Type')) {
+            headers.set('Content-Type', 'application/json');
+        }
+        fetchOptions.headers = headers;
+
+        const response = await fetch(requestUrl, fetchOptions);
+        if (!response.ok) {
+            const error = new Error(`Request failed with status ${response.status}`);
+            error.response = response;
+            throw error;
+        }
+        return response;
+    }
+
+    async function fetchUserByUsername(username) {
+        const collectionName = restDbConfig.usersCollection || 'users';
+        const query = encodeURIComponent(JSON.stringify({ username }));
+        const response = await restDbFetch(`${collectionName}?q=${query}&max=1`);
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+            return data[0];
+        }
+        return null;
+    }
+
+    async function createUserRecord(username, password) {
+        const collectionName = restDbConfig.usersCollection || 'users';
+        const payload = { username, password };
+        const response = await restDbFetch(collectionName, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        return response.json();
+    }
+
+    function updateAuthUI() {
+        if (authenticatedUser) {
+            if (authButtonsContainer) {
+                authButtonsContainer.classList.add('hidden');
+            }
+            if (authStatus) {
+                authStatus.classList.remove('hidden');
+            }
+            if (authStatusText) {
+                authStatusText.textContent = `Logged in as ${authenticatedUser.username}`;
+            }
+        } else {
+            if (authButtonsContainer) {
+                authButtonsContainer.classList.remove('hidden');
+            }
+            if (authStatus) {
+                authStatus.classList.add('hidden');
+            }
+            if (authStatusText) {
+                authStatusText.textContent = '';
+            }
+        }
+    }
+
+    function setAuthenticatedUser(user) {
+        const normalizedUser = user && user.username ? {
+            username: user.username,
+            id: user.id || user._id || null
+        } : null;
+
+        authenticatedUser = normalizedUser;
+        try {
+            if (typeof localStorage !== 'undefined') {
+                if (normalizedUser) {
+                    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(normalizedUser));
+                } else {
+                    localStorage.removeItem(AUTH_STORAGE_KEY);
+                }
+            }
+        } catch (storageError) {
+            console.error('Unable to persist authentication state', storageError);
+        }
+        updateAuthUI();
+    }
+
+    function restoreAuthentication() {
+        if (typeof window === 'undefined' || !window.localStorage) {
+            updateAuthUI();
+            return;
+        }
+        try {
+            const storedValue = localStorage.getItem(AUTH_STORAGE_KEY);
+            if (storedValue) {
+                const parsed = JSON.parse(storedValue);
+                if (parsed && parsed.username) {
+                    authenticatedUser = parsed;
+                }
+            }
+        } catch (parseError) {
+            console.error('Unable to restore authentication state', parseError);
+            authenticatedUser = null;
+        }
+        updateAuthUI();
+    }
+
+    async function handleLoginSubmit(event) {
+        event.preventDefault();
+        if (!loginForm) {
+            return;
+        }
+
+        clearAuthError(loginForm);
+        const formData = new FormData(loginForm);
+        const username = (formData.get('username') || '').toString().trim();
+        const password = (formData.get('password') || '').toString();
+
+        if (!username || !password) {
+            showAuthError(loginForm, 'Please provide both a username and password.');
+            return;
+        }
+
+        setFormSubmitting(loginForm, true);
+        try {
+            const existingUser = await fetchUserByUsername(username);
+            if (!existingUser) {
+                showAuthError(loginForm, 'No account found with that username.');
+                return;
+            }
+            if ((existingUser.password || '') !== password) {
+                showAuthError(loginForm, 'Incorrect password. Please try again.');
+                return;
+            }
+
+            setAuthenticatedUser({
+                username,
+                id: existingUser._id || existingUser.id || null
+            });
+            loginForm.reset();
+            closeAuthModal(loginModal);
+        } catch (error) {
+            if (error && error.code === REST_DB_NOT_CONFIGURED_ERROR) {
+                showAuthError(loginForm, 'Authentication service is not configured.');
+            } else if (error && error.response && error.response.status >= 500) {
+                showAuthError(loginForm, 'Authentication service is unavailable. Please try again later.');
+            } else {
+                showAuthError(loginForm, 'Unable to log in. Please try again.');
+            }
+            console.error('Login request failed', error);
+        } finally {
+            setFormSubmitting(loginForm, false);
+        }
+    }
+
+    async function handleSignupSubmit(event) {
+        event.preventDefault();
+        if (!signupForm) {
+            return;
+        }
+
+        clearAuthError(signupForm);
+        const formData = new FormData(signupForm);
+        const username = (formData.get('username') || '').toString().trim();
+        const password = (formData.get('password') || '').toString();
+
+        if (!username || !password) {
+            showAuthError(signupForm, 'Please provide both a username and password.');
+            return;
+        }
+
+        setFormSubmitting(signupForm, true);
+        try {
+            const existingUser = await fetchUserByUsername(username);
+            if (existingUser) {
+                showAuthError(signupForm, 'That username is already taken.');
+                return;
+            }
+
+            const createdUser = await createUserRecord(username, password);
+            setAuthenticatedUser({
+                username,
+                id: createdUser && (createdUser._id || createdUser.id) ? createdUser._id || createdUser.id : null
+            });
+            signupForm.reset();
+            closeAuthModal(signupModal);
+        } catch (error) {
+            if (error && error.code === REST_DB_NOT_CONFIGURED_ERROR) {
+                showAuthError(signupForm, 'Authentication service is not configured.');
+            } else if (error && error.response && error.response.status === 409) {
+                showAuthError(signupForm, 'That username is already taken.');
+            } else if (error && error.response && error.response.status >= 500) {
+                showAuthError(signupForm, 'Authentication service is unavailable. Please try again later.');
+            } else {
+                showAuthError(signupForm, 'Unable to create an account. Please try again.');
+            }
+            console.error('Account creation failed', error);
+        } finally {
+            setFormSubmitting(signupForm, false);
+        }
+    }
+
+    restoreAuthentication();
 
     function openAuthModal(modal) {
         if (!modal) {
@@ -72,6 +333,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
+        if (modal === loginModal && loginForm) {
+            clearAuthError(loginForm);
+        }
+        if (modal === signupModal && signupForm) {
+            clearAuthError(signupForm);
+        }
         if (![loginModal, signupModal].some(element => element && !element.classList.contains('hidden'))) {
             pageBody.classList.remove('modal-open');
         }
@@ -82,11 +349,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (loginButton && loginModal) {
-        loginButton.addEventListener('click', () => openAuthModal(loginModal));
+        loginButton.addEventListener('click', () => {
+            if (authenticatedUser) {
+                return;
+            }
+            if (loginForm) {
+                loginForm.reset();
+                clearAuthError(loginForm);
+            }
+            openAuthModal(loginModal);
+        });
     }
 
     if (signupButton && signupModal) {
-        signupButton.addEventListener('click', () => openAuthModal(signupModal));
+        signupButton.addEventListener('click', () => {
+            if (authenticatedUser) {
+                return;
+            }
+            if (signupForm) {
+                signupForm.reset();
+                clearAuthError(signupForm);
+            }
+            openAuthModal(signupModal);
+        });
+    }
+
+    if (logoutButton) {
+        logoutButton.addEventListener('click', () => {
+            setAuthenticatedUser(null);
+        });
     }
 
     [loginModal, signupModal].forEach(modal => {
@@ -116,17 +407,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (loginForm && loginModal) {
-        loginForm.addEventListener('submit', event => {
-            event.preventDefault();
-            closeAuthModal(loginModal);
-        });
+        loginForm.addEventListener('submit', handleLoginSubmit);
     }
 
     if (signupForm && signupModal) {
-        signupForm.addEventListener('submit', event => {
-            event.preventDefault();
-            closeAuthModal(signupModal);
-        });
+        signupForm.addEventListener('submit', handleSignupSubmit);
     }
 
     const botOptions = [
