@@ -2761,7 +2761,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         currentHistoryIndex = clamped;
         const state = historyStates[clamped];
-        renderState(state);
+        renderState(state, { skipOrientationUpdate: true });
         updateMoveHistoryUI();
         const popup = document.querySelector('.checkmate-popup');
         if (popup) {
