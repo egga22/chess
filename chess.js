@@ -57,11 +57,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const authStatusText = document.getElementById('authStatusText');
     const logoutButton = document.getElementById('logoutButton');
     const restDbBaseUrlAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbBaseUrl : '';
-    const restDbUsersCollectionAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbUsersCollection : '';
+    const restDbAccountsCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbAccountsCollection || '') : '';
+    const restDbUsersCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbUsersCollection || '') : '';
+    const restDbGamesCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbGamesCollection || '') : '';
     const restDbApiKeyAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbApiKey : '';
     const restDbConfig = {
         baseUrl: (restDbBaseUrlAttribute || 'https://chess-7deb.restdb.io/rest').trim(),
-        usersCollection: (restDbUsersCollectionAttribute || 'users').trim(),
+        accountsCollection: (restDbAccountsCollectionAttribute || restDbUsersCollectionAttribute || 'accounts').trim(),
+        gamesCollection: (restDbGamesCollectionAttribute || 'games').trim(),
         apiKey: (restDbApiKeyAttribute || '68d6f8a9b349a33f8d4b70d8').trim()
     };
     const AUTH_STORAGE_KEY = 'chess-auth-user';
@@ -132,7 +135,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function fetchUserByUsername(username) {
-        const collectionName = restDbConfig.usersCollection || 'users';
+        const collectionName = restDbConfig.accountsCollection || 'accounts';
         const query = encodeURIComponent(JSON.stringify({ username }));
         const response = await restDbFetch(`${collectionName}?q=${query}&max=1`);
         const data = await response.json();
@@ -143,7 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function createUserRecord(username, password) {
-        const collectionName = restDbConfig.usersCollection || 'users';
+        const collectionName = restDbConfig.accountsCollection || 'accounts';
         const payload = { username, password };
         const response = await restDbFetch(collectionName, {
             method: 'POST',
