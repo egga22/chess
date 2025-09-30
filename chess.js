@@ -56,6 +56,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const authStatus = document.getElementById('authStatus');
     const authStatusText = document.getElementById('authStatusText');
     const logoutButton = document.getElementById('logoutButton');
+    const onlineControls = document.getElementById('onlineControls');
+    const findOnlineMatchButton = document.getElementById('findOnlineMatchButton');
+    const cancelOnlineSearchButton = document.getElementById('cancelOnlineSearchButton');
+    const playFriendButton = document.getElementById('playFriendButton');
+    const friendUsernameInput = document.getElementById('friendUsernameInput');
+    const onlineStatusMessage = document.getElementById('onlineStatusMessage');
     const restDbBaseUrlAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbBaseUrl : '';
     const restDbAccountsCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbAccountsCollection || '') : '';
     const restDbUsersCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbUsersCollection || '') : '';
@@ -70,6 +76,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const AUTH_STORAGE_KEY = 'chess-auth-user';
     const REST_DB_NOT_CONFIGURED_ERROR = 'REST_DB_NOT_CONFIGURED';
     let authenticatedUser = null;
+    const ONLINE_SEARCH_POLL_INTERVAL = 4000;
+    const ONLINE_GAME_POLL_INTERVAL = 4000;
+
+    function createInitialOnlineGameState() {
+        return {
+            status: 'idle',
+            mode: null,
+            variant: 'standard',
+            opponentUsername: null,
+            playerColor: null,
+            gameRecordId: null,
+            gameId: null,
+            initialFen: null,
+            localMoves: [],
+            searchToken: null,
+            pollTimerId: null,
+            lastKnownPgn: '',
+            lastKnownMoveCount: 0,
+            syncInFlight: false,
+            pendingSync: false
+        };
+    }
+
+    let onlineGameState = createInitialOnlineGameState();
+    let onlineSearchTimerId = null;
+    let suppressOnlineSync = false;
 
     function showAuthError(form, message) {
         if (!form) {
@@ -155,6 +187,806 @@ document.addEventListener("DOMContentLoaded", () => {
         return response.json();
     }
 
+    function isOnlineMode() {
+        return gameMode === 'online';
+    }
+
+    function isOnlineGameActive() {
+        return isOnlineMode() && onlineGameState.status === 'active' && Boolean(onlineGameState.gameRecordId);
+    }
+
+    function setOnlineStatus(text) {
+        if (onlineStatusMessage) {
+            onlineStatusMessage.textContent = text || '';
+        }
+    }
+
+    function stopOnlineSearchTimer() {
+        if (onlineSearchTimerId) {
+            clearInterval(onlineSearchTimerId);
+            onlineSearchTimerId = null;
+        }
+    }
+
+    function stopOnlinePolling() {
+        if (onlineGameState.pollTimerId) {
+            clearInterval(onlineGameState.pollTimerId);
+            onlineGameState.pollTimerId = null;
+        }
+    }
+
+    function resetOnlineGameState(options = {}) {
+        const { keepStatusMessage = false } = options;
+        stopOnlineSearchTimer();
+        stopOnlinePolling();
+        const currentVariant = typeof gameType !== 'undefined' ? gameType : 'standard';
+        onlineGameState = Object.assign(createInitialOnlineGameState(), {
+            variant: currentVariant
+        });
+        if (!keepStatusMessage) {
+            setOnlineStatus('');
+        }
+        updateOnlineControlsState();
+    }
+
+    function ensureAuthenticatedForOnline() {
+        if (authenticatedUser) {
+            return true;
+        }
+        if (isOnlineMode()) {
+            setOnlineStatus('Log in to start an online game.');
+        }
+        return false;
+    }
+
+    function updateOnlineControlsState() {
+        if (!onlineControls) {
+            return;
+        }
+
+        const showControls = isOnlineMode();
+        onlineControls.style.display = showControls ? 'flex' : 'none';
+
+        if (!showControls) {
+            return;
+        }
+
+        const searching = onlineGameState.status === 'searching';
+        const activeGame = isOnlineGameActive();
+        const loggedIn = Boolean(authenticatedUser);
+
+        if (!loggedIn) {
+            setOnlineStatus('Log in to start an online game.');
+        } else if (searching) {
+            setOnlineStatus('Searching for an opponent...');
+        } else if (activeGame) {
+            const colorLabel = onlineGameState.playerColor === 'b' ? 'Black' : 'White';
+            const opponent = onlineGameState.opponentUsername || 'opponent';
+            setOnlineStatus(`Playing ${opponent} as ${colorLabel}.`);
+        } else {
+            setOnlineStatus('Choose a matchmaking option to start playing online.');
+        }
+
+        const disableInteractions = !loggedIn || searching || activeGame;
+        if (findOnlineMatchButton) {
+            findOnlineMatchButton.disabled = disableInteractions;
+        }
+        if (playFriendButton) {
+            playFriendButton.disabled = disableInteractions;
+        }
+        if (friendUsernameInput) {
+            friendUsernameInput.disabled = !loggedIn || searching || activeGame;
+        }
+        if (cancelOnlineSearchButton) {
+            cancelOnlineSearchButton.style.display = searching ? 'inline-flex' : 'none';
+            cancelOnlineSearchButton.disabled = !searching;
+        }
+
+        if (gameTypeSelect) {
+            gameTypeSelect.disabled = searching || activeGame;
+        }
+    }
+
+    async function ensureAccountRecord(username) {
+        const record = await fetchUserByUsername(username);
+        if (!record) {
+            throw new Error(`Account '${username}' was not found.`);
+        }
+        const accountId = record._id || record.id;
+        if (!accountId) {
+            throw new Error('Account record is missing an identifier.');
+        }
+        return { record, accountId };
+    }
+
+    async function updateAccountRecordById(accountId, payload) {
+        const collectionName = restDbConfig.accountsCollection || 'accounts';
+        const response = await restDbFetch(`${collectionName}/${accountId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+        return response.json();
+    }
+
+    async function updateAccountCurrentGames(username, updater) {
+        const { record, accountId } = await ensureAccountRecord(username);
+        const currentGames = Array.isArray(record.current_games) ? record.current_games.slice() : [];
+        const updatedGames = updater(currentGames, record);
+        if (!updatedGames) {
+            return record;
+        }
+        const payload = { current_games: updatedGames };
+        return updateAccountRecordById(accountId, payload);
+    }
+
+    async function setAccountWaitingState(username, options = {}) {
+        const { variant = 'standard', token = '' } = options;
+        const { accountId } = await ensureAccountRecord(username);
+        const now = new Date().toISOString();
+        const payload = {
+            waiting_for_match_active: true,
+            waiting_for_match_variant: variant,
+            waiting_for_match_since: now,
+            waiting_for_match_token: token
+        };
+        await updateAccountRecordById(accountId, payload);
+    }
+
+    async function clearAccountWaitingState(username) {
+        try {
+            const { accountId } = await ensureAccountRecord(username);
+            const payload = {
+                waiting_for_match_active: false,
+                waiting_for_match_variant: null,
+                waiting_for_match_since: null,
+                waiting_for_match_token: null
+            };
+            await updateAccountRecordById(accountId, payload);
+        } catch (error) {
+            console.error('Unable to clear waiting state', error);
+        }
+    }
+
+    async function findWaitingOpponent(username, variant) {
+        const collectionName = restDbConfig.accountsCollection || 'accounts';
+        const query = {
+            username: { $ne: username },
+            waiting_for_match_active: true,
+            waiting_for_match_variant: variant
+        };
+        const queryString = encodeURIComponent(JSON.stringify(query));
+        const response = await restDbFetch(`${collectionName}?q=${queryString}&max=1&sort=waiting_for_match_since`);
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+            return data[0];
+        }
+        return null;
+    }
+
+    async function fetchGameRecordById(recordId) {
+        if (!recordId) {
+            return null;
+        }
+        const collectionName = restDbConfig.gamesCollection || 'games';
+        try {
+            const response = await restDbFetch(`${collectionName}/${recordId}`);
+            return response.json();
+        } catch (error) {
+            if (error.response && error.response.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    async function getNextGameId() {
+        const collectionName = restDbConfig.gamesCollection || 'games';
+        try {
+            const response = await restDbFetch(`${collectionName}?max=1&sort=game_id&dir=-1`);
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                const currentValue = Number.parseInt(data[0].game_id, 10);
+                if (Number.isFinite(currentValue)) {
+                    return currentValue + 1;
+                }
+            }
+        } catch (error) {
+            console.error('Unable to fetch the next game id', error);
+        }
+        return 1;
+    }
+
+    function buildFenFromSetup(setup) {
+        if (!setup) {
+            return '';
+        }
+        const board = setup.board || createEmptyBoardMatrix();
+        const rows = [];
+        for (let row = 0; row < 8; row++) {
+            let empty = 0;
+            let rowText = '';
+            for (let col = 0; col < 8; col++) {
+                const piece = board[row][col];
+                if (piece) {
+                    if (empty > 0) {
+                        rowText += empty;
+                        empty = 0;
+                    }
+                    const typeMap = { pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k' };
+                    const symbol = typeMap[piece.type] || 'p';
+                    rowText += piece.color === 'w' ? symbol.toUpperCase() : symbol;
+                } else {
+                    empty += 1;
+                }
+            }
+            if (empty > 0) {
+                rowText += empty;
+            }
+            rows.push(rowText);
+        }
+        const castling = setup.castling || '-';
+        const enPassant = setup.enPassant && setup.enPassant !== '' ? setup.enPassant : '-';
+        const halfmove = Number.isFinite(setup.halfmove) ? setup.halfmove : 0;
+        const fullmove = Number.isFinite(setup.fullmove) && setup.fullmove > 0 ? setup.fullmove : 1;
+        const turnField = setup.turn === 'b' ? 'b' : 'w';
+        return `${rows.join('/') } ${turnField} ${castling || '-'} ${enPassant} ${halfmove} ${fullmove}`;
+    }
+
+    async function createOnlineGameRecord({ whiteUsername, blackUsername, variant, setup }) {
+        const gamesCollection = restDbConfig.gamesCollection || 'games';
+        const nextGameId = await getNextGameId();
+        const createdAt = new Date().toISOString();
+        const initialSetup = setup ? cloneSetup(setup) : getSetupForVariantName(variant);
+        const normalizedSetup = initialSetup || createStandardSetup();
+        const initialFen = buildFenFromSetup(normalizedSetup);
+        const payload = {
+            game_id: nextGameId,
+            white_username: whiteUsername,
+            black_username: blackUsername,
+            created_at: createdAt,
+            variant,
+            pgn: '',
+            moves: [],
+            initial_fen: initialFen,
+            status: 'active'
+        };
+        const response = await restDbFetch(gamesCollection, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        const record = await response.json();
+        return Object.assign({}, record, {
+            game_id: record.game_id || nextGameId,
+            initial_fen: record.initial_fen || initialFen,
+            variant
+        });
+    }
+
+    async function addGameEntryToAccount(username, gameRecord, color) {
+        const entry = {
+            game_id: gameRecord.game_id,
+            game_record_id: gameRecord._id || gameRecord.id || gameRecord.game_record_id || null,
+            opponent: color === 'w' ? gameRecord.black_username : gameRecord.white_username,
+            color,
+            variant: gameRecord.variant || 'standard',
+            started_at: gameRecord.created_at || new Date().toISOString(),
+            mode: 'online'
+        };
+        await updateAccountCurrentGames(username, games => {
+            const filtered = games.filter(game => {
+                if (!game) {
+                    return false;
+                }
+                if (game.game_record_id && entry.game_record_id && game.game_record_id === entry.game_record_id) {
+                    return false;
+                }
+                const existingId = Number.parseInt(game.game_id, 10);
+                const newId = Number.parseInt(entry.game_id, 10);
+                if (Number.isFinite(existingId) && Number.isFinite(newId) && existingId === newId) {
+                    return false;
+                }
+                return true;
+            });
+            filtered.push(entry);
+            return filtered;
+        });
+    }
+
+    async function removeGameEntryFromAccount(username, gameRecord) {
+        if (!username) {
+            return;
+        }
+        const recordId = gameRecord && (gameRecord.game_record_id || gameRecord.gameRecordId || gameRecord._id || gameRecord.id || null);
+        const numericId = Number.parseInt(gameRecord && gameRecord.game_id, 10);
+        await updateAccountCurrentGames(username, games => {
+            return games.filter(game => {
+                if (!game) {
+                    return false;
+                }
+                if (recordId && game.game_record_id && game.game_record_id === recordId) {
+                    return false;
+                }
+                const existingId = Number.parseInt(game.game_id, 10);
+                if (Number.isFinite(existingId) && Number.isFinite(numericId) && existingId === numericId) {
+                    return false;
+                }
+                return true;
+            });
+        });
+    }
+
+    function startOnlineSearchTimer(variant) {
+        stopOnlineSearchTimer();
+        onlineSearchTimerId = setInterval(() => {
+            pollForOnlineMatch(variant).catch(error => {
+                console.error('Online matchmaking poll failed', error);
+            });
+        }, ONLINE_SEARCH_POLL_INTERVAL);
+    }
+
+    async function pollForOnlineMatch(variant) {
+        if (!authenticatedUser) {
+            stopOnlineSearchTimer();
+            return;
+        }
+        try {
+            const username = authenticatedUser.username;
+            const account = await fetchUserByUsername(username);
+            if (account && Array.isArray(account.current_games)) {
+                const existing = account.current_games.find(game => {
+                    if (!game) {
+                        return false;
+                    }
+                    if (game.mode !== 'online') {
+                        return false;
+                    }
+                    if (onlineGameState.gameId && game.game_id === onlineGameState.gameId) {
+                        return false;
+                    }
+                    return true;
+                });
+                if (existing && existing.game_record_id) {
+                    const record = await fetchGameRecordById(existing.game_record_id);
+                    if (record) {
+                        const color = record.white_username === username ? 'w' : 'b';
+                        onlineGameState.mode = 'matchmaking';
+                        activateOnlineGameFromRecord(record, { playerColor: color });
+                        return;
+                    }
+                }
+            }
+
+            const opponent = await findWaitingOpponent(authenticatedUser.username, variant);
+            if (opponent) {
+                await initiateMatchWithOpponent(opponent, variant);
+            }
+        } catch (error) {
+            console.error('Error while polling for an online match', error);
+        }
+    }
+
+    async function initiateMatchWithOpponent(opponentRecord, variant) {
+        if (!authenticatedUser || !opponentRecord || !opponentRecord.username) {
+            return;
+        }
+        const opponentUsername = opponentRecord.username;
+        const assignWhiteToSelf = Math.random() < 0.5;
+        const whiteUsername = assignWhiteToSelf ? authenticatedUser.username : opponentUsername;
+        const blackUsername = assignWhiteToSelf ? opponentUsername : authenticatedUser.username;
+        const ourColor = assignWhiteToSelf ? 'w' : 'b';
+        const setup = getSetupForVariantName(variant);
+
+        const gameRecord = await createOnlineGameRecord({
+            whiteUsername,
+            blackUsername,
+            variant,
+            setup
+        });
+
+        await Promise.all([
+            clearAccountWaitingState(authenticatedUser.username),
+            clearAccountWaitingState(opponentUsername)
+        ]);
+        await Promise.all([
+            addGameEntryToAccount(whiteUsername, gameRecord, 'w'),
+            addGameEntryToAccount(blackUsername, gameRecord, 'b')
+        ]);
+
+        onlineGameState.mode = 'matchmaking';
+        activateOnlineGameFromRecord(gameRecord, { playerColor: ourColor });
+    }
+
+    async function applyGameRecordLocally(gameRecord, options = {}) {
+        if (!gameRecord) {
+            return;
+        }
+        const { skipStatusUpdate = false } = options;
+        const variant = gameRecord.variant || 'standard';
+        const initialFen = gameRecord.initial_fen || null;
+        let setup = null;
+        if (initialFen) {
+            try {
+                setup = parseFEN(initialFen);
+            } catch (error) {
+                console.error('Unable to parse initial FEN for online game', error);
+            }
+        }
+        if (!setup) {
+            setup = getSetupForVariantName(variant);
+        }
+
+        suppressOnlineSync = true;
+        try {
+            applySetupToGame(cloneSetup(setup));
+            const moves = Array.isArray(gameRecord.moves) ? gameRecord.moves.slice().sort((a, b) => {
+                const aIndex = Number.isFinite(a.index) ? a.index : 0;
+                const bIndex = Number.isFinite(b.index) ? b.index : 0;
+                return aIndex - bIndex;
+            }) : [];
+            onlineGameState.localMoves = moves.map(move => ({ ...move }));
+            for (const move of moves) {
+                const piece = document.querySelector(`[data-row="${move.fromRow}"][data-col="${move.fromCol}"] .piece`);
+                if (!piece) {
+                    console.warn('Unable to replay online move from remote data', move);
+                    continue;
+                }
+                movePieceToSquare(piece, move.toRow, move.toCol, move.promotionType || null);
+            }
+        } finally {
+            suppressOnlineSync = false;
+        }
+
+        onlineGameState.lastKnownPgn = gameRecord.pgn || '';
+        onlineGameState.lastKnownMoveCount = Array.isArray(gameRecord.moves) ? gameRecord.moves.length : 0;
+
+        if (!skipStatusUpdate) {
+            updateOnlineControlsState();
+        }
+    }
+
+    function activateOnlineGameFromRecord(gameRecord, options = {}) {
+        const { playerColor = 'w' } = options;
+        resetOnlineGameState({ keepStatusMessage: true });
+        onlineGameState.status = 'active';
+        onlineGameState.variant = gameRecord.variant || 'standard';
+        onlineGameState.playerColor = playerColor === 'b' ? 'b' : 'w';
+        onlineGameState.opponentUsername = playerColor === 'w' ? gameRecord.black_username : gameRecord.white_username;
+        onlineGameState.gameRecordId = gameRecord._id || gameRecord.id || gameRecord.game_record_id || null;
+        onlineGameState.gameId = gameRecord.game_id || null;
+        onlineGameState.initialFen = gameRecord.initial_fen || null;
+        onlineGameState.localMoves = Array.isArray(gameRecord.moves) ? gameRecord.moves.map(move => ({ ...move })) : [];
+        onlineGameState.lastKnownPgn = gameRecord.pgn || '';
+        onlineGameState.lastKnownMoveCount = onlineGameState.localMoves.length;
+
+        if (gameTypeSelect) {
+            gameTypeSelect.value = onlineGameState.variant;
+        }
+        if (typeof gameType !== 'undefined') {
+            gameType = onlineGameState.variant;
+        }
+
+        applyGameRecordLocally(gameRecord, { skipStatusUpdate: true }).then(() => {
+            updateBoardOrientationState({ force: true });
+            updateOnlineControlsState();
+        }).catch(error => {
+            console.error('Unable to apply the online game locally', error);
+        });
+
+        stopOnlineSearchTimer();
+        stopOnlinePolling();
+        onlineGameState.pollTimerId = setInterval(() => {
+            pollOnlineGame().catch(error => {
+                console.error('Unable to refresh online game', error);
+            });
+        }, ONLINE_GAME_POLL_INTERVAL);
+        pollOnlineGame().catch(error => {
+            console.error('Unable to perform initial online sync', error);
+        });
+        updateOnlineControlsState();
+    }
+
+    async function pollOnlineGame() {
+        if (!isOnlineGameActive()) {
+            return;
+        }
+        try {
+            const record = await fetchGameRecordById(onlineGameState.gameRecordId);
+            if (!record) {
+                return;
+            }
+            if (record.status && record.status !== 'active') {
+                onlineGameState.status = record.status;
+                stopOnlinePolling();
+                const gameInfo = {
+                    game_record_id: onlineGameState.gameRecordId,
+                    game_id: onlineGameState.gameId
+                };
+                const cleanup = [];
+                if (authenticatedUser && authenticatedUser.username) {
+                    cleanup.push(removeGameEntryFromAccount(authenticatedUser.username, gameInfo));
+                }
+                if (onlineGameState.opponentUsername) {
+                    cleanup.push(removeGameEntryFromAccount(onlineGameState.opponentUsername, gameInfo));
+                }
+                if (cleanup.length) {
+                    Promise.all(cleanup).catch(err => {
+                        console.error('Unable to clear finished match entries', err);
+                    });
+                }
+                updateOnlineControlsState();
+            }
+            const remoteMoveCount = Array.isArray(record.moves) ? record.moves.length : 0;
+            const remotePgn = record.pgn || '';
+            if (remoteMoveCount === onlineGameState.lastKnownMoveCount && remotePgn === onlineGameState.lastKnownPgn) {
+                return;
+            }
+            suppressOnlineSync = true;
+            try {
+                await applyGameRecordLocally(record, { skipStatusUpdate: true });
+            } finally {
+                suppressOnlineSync = false;
+            }
+            onlineGameState.localMoves = Array.isArray(record.moves) ? record.moves.map(move => ({ ...move })) : [];
+            onlineGameState.lastKnownMoveCount = remoteMoveCount;
+            onlineGameState.lastKnownPgn = remotePgn;
+            updateOnlineControlsState();
+        } catch (error) {
+            console.error('Unable to synchronize online game state', error);
+        }
+    }
+
+    function buildPgnFromHistory(entries) {
+        if (!entries || !entries.length) {
+            return '';
+        }
+        const rows = [];
+        entries.forEach(entry => {
+            let row = rows[rows.length - 1];
+            if (!row || row.number !== entry.moveNumber) {
+                row = { number: entry.moveNumber, white: '', black: '' };
+                rows.push(row);
+            }
+            if (entry.color === 'w') {
+                row.white = entry.notation;
+            } else {
+                row.black = entry.notation;
+            }
+        });
+        return rows.map(row => {
+            if (row.black) {
+                return `${row.number}. ${row.white} ${row.black}`;
+            }
+            return `${row.number}. ${row.white}`;
+        }).join(' ');
+    }
+
+    async function syncOnlineGameRecord() {
+        if (!isOnlineGameActive()) {
+            return;
+        }
+        if (onlineGameState.syncInFlight) {
+            onlineGameState.pendingSync = true;
+            return;
+        }
+
+        const gamesCollection = restDbConfig.gamesCollection || 'games';
+        const recordId = onlineGameState.gameRecordId;
+        if (!recordId) {
+            return;
+        }
+
+        const payload = {
+            pgn: buildPgnFromHistory(moveHistoryEntries),
+            moves: onlineGameState.localMoves.map(move => ({ ...move })),
+            last_update_at: new Date().toISOString()
+        };
+        if (onlineGameState.status === 'completed') {
+            payload.status = 'completed';
+        }
+
+        onlineGameState.syncInFlight = true;
+        try {
+            await restDbFetch(`${gamesCollection}/${recordId}`, {
+                method: 'PATCH',
+                body: JSON.stringify(payload)
+            });
+            onlineGameState.lastKnownPgn = payload.pgn;
+            onlineGameState.lastKnownMoveCount = payload.moves.length;
+        } catch (error) {
+            console.error('Unable to synchronize online game record', error);
+        } finally {
+            onlineGameState.syncInFlight = false;
+            if (onlineGameState.pendingSync) {
+                onlineGameState.pendingSync = false;
+                syncOnlineGameRecord();
+            }
+        }
+    }
+
+    function handleOnlineMoveFinalized(moveDetails, notation, options = {}) {
+        if (suppressOnlineSync || !isOnlineGameActive()) {
+            return;
+        }
+        const latestEntry = moveHistoryEntries[moveHistoryEntries.length - 1];
+        if (!latestEntry) {
+            return;
+        }
+
+        const latestState = historyStates[historyStates.length - 1];
+        const activeTurn = options.isMate
+            ? (moveDetails.color === 'w' ? 'b' : 'w')
+            : (latestState ? latestState.turn : turn);
+        const fen = generateFEN({ overrideTurn: activeTurn });
+        const moveIndex = moveHistoryEntries.length;
+        const moveRecord = {
+            index: moveIndex,
+            moveNumber: latestEntry.moveNumber,
+            color: moveDetails.color,
+            notation,
+            pieceType: moveDetails.pieceType,
+            fromRow: moveDetails.fromRow,
+            fromCol: moveDetails.fromCol,
+            toRow: moveDetails.toRow,
+            toCol: moveDetails.toCol,
+            from: getSquareNotation(moveDetails.fromRow, moveDetails.fromCol),
+            to: getSquareNotation(moveDetails.toRow, moveDetails.toCol),
+            isCapture: moveDetails.isCapture,
+            capturedPieceType: moveDetails.capturedPieceType,
+            capturedPieceColor: moveDetails.capturedPieceColor,
+            isEnPassant: moveDetails.isEnPassant,
+            isCastling: moveDetails.isCastling,
+            promotionType: moveDetails.promotionType || null,
+            disambiguation: moveDetails.disambiguation || '',
+            fen,
+            timestamp: new Date().toISOString(),
+            fullmoveNumber: latestState ? latestState.fullmoveNumber : fullmoveNumber,
+            halfmoveClock: latestState ? latestState.halfmoveClock : halfmoveClock
+        };
+
+        if (onlineGameState.localMoves.length >= moveIndex) {
+            onlineGameState.localMoves = onlineGameState.localMoves.slice(0, moveIndex - 1);
+        }
+        onlineGameState.localMoves.push(moveRecord);
+        if (options.isMate || options.drawReason) {
+            onlineGameState.status = 'completed';
+            stopOnlinePolling();
+            const gameInfo = {
+                game_record_id: onlineGameState.gameRecordId,
+                game_id: onlineGameState.gameId
+            };
+            const removalPromises = [];
+            if (authenticatedUser && authenticatedUser.username) {
+                removalPromises.push(removeGameEntryFromAccount(authenticatedUser.username, gameInfo));
+            }
+            if (onlineGameState.opponentUsername) {
+                removalPromises.push(removeGameEntryFromAccount(onlineGameState.opponentUsername, gameInfo));
+            }
+            if (removalPromises.length) {
+                Promise.all(removalPromises).catch(err => {
+                    console.error('Unable to update current games for completed match', err);
+                });
+            }
+            updateOnlineControlsState();
+        }
+        syncOnlineGameRecord().catch(error => {
+            console.error('Unable to update online game record after move', error);
+        });
+    }
+
+    async function startOnlineMatchmaking() {
+        if (!isOnlineMode()) {
+            return;
+        }
+        if (!ensureAuthenticatedForOnline()) {
+            return;
+        }
+        if (onlineGameState.status === 'searching' || isOnlineGameActive()) {
+            return;
+        }
+        const variant = gameTypeSelect ? gameTypeSelect.value : 'standard';
+        const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        onlineGameState.variant = variant;
+        onlineGameState.mode = 'matchmaking';
+        onlineGameState.searchToken = token;
+        onlineGameState.status = 'searching';
+        updateOnlineControlsState();
+        try {
+            const opponent = await findWaitingOpponent(authenticatedUser.username, variant);
+            if (opponent) {
+                await initiateMatchWithOpponent(opponent, variant);
+                return;
+            }
+            await setAccountWaitingState(authenticatedUser.username, { variant, token });
+            startOnlineSearchTimer(variant);
+        } catch (error) {
+            console.error('Unable to start online matchmaking', error);
+            if (error && error.code === REST_DB_NOT_CONFIGURED_ERROR) {
+                setOnlineStatus('Online play is not available at the moment.');
+            } else {
+                setOnlineStatus('Unable to start matchmaking. Please try again.');
+            }
+            resetOnlineGameState({ keepStatusMessage: true });
+            updateOnlineControlsState();
+        }
+    }
+
+    async function cancelOnlineSearch() {
+        if (onlineGameState.status !== 'searching') {
+            return;
+        }
+        stopOnlineSearchTimer();
+        onlineGameState.status = 'idle';
+        updateOnlineControlsState();
+        if (authenticatedUser) {
+            try {
+                await clearAccountWaitingState(authenticatedUser.username);
+            } catch (error) {
+                console.error('Unable to cancel online search', error);
+            }
+        }
+        setOnlineStatus('Online matchmaking canceled.');
+    }
+
+    async function startFriendGame() {
+        if (!isOnlineMode()) {
+            return;
+        }
+        if (!ensureAuthenticatedForOnline()) {
+            return;
+        }
+        if (onlineGameState.status === 'searching' || isOnlineGameActive()) {
+            return;
+        }
+        const username = authenticatedUser.username;
+        const friendName = friendUsernameInput ? friendUsernameInput.value.trim() : '';
+        if (!friendName) {
+            setOnlineStatus('Enter your friend\'s username to start a game.');
+            return;
+        }
+        if (friendName.toLowerCase() === username.toLowerCase()) {
+            setOnlineStatus('You cannot start an online game against yourself.');
+            return;
+        }
+        try {
+            const friendRecord = await fetchUserByUsername(friendName);
+            if (!friendRecord) {
+                setOnlineStatus('No user with that username was found.');
+                return;
+            }
+            const variant = gameTypeSelect ? gameTypeSelect.value : 'standard';
+            const setup = getSetupForVariantName(variant);
+            const assignWhiteToSelf = Math.random() < 0.5;
+            const whiteUsername = assignWhiteToSelf ? username : friendName;
+            const blackUsername = assignWhiteToSelf ? friendName : username;
+            const ourColor = assignWhiteToSelf ? 'w' : 'b';
+            const gameRecord = await createOnlineGameRecord({
+                whiteUsername,
+                blackUsername,
+                variant,
+                setup
+            });
+            await Promise.all([
+                addGameEntryToAccount(whiteUsername, gameRecord, 'w'),
+                addGameEntryToAccount(blackUsername, gameRecord, 'b'),
+                clearAccountWaitingState(username),
+                clearAccountWaitingState(friendName)
+            ]);
+            onlineGameState.mode = 'friend';
+            activateOnlineGameFromRecord(gameRecord, { playerColor: ourColor });
+            setOnlineStatus(`Started a game with ${friendName}.`);
+            if (friendUsernameInput) {
+                friendUsernameInput.value = '';
+            }
+        } catch (error) {
+            console.error('Unable to start an online game with friend', error);
+            if (error && error.code === REST_DB_NOT_CONFIGURED_ERROR) {
+                setOnlineStatus('Online play is not available at the moment.');
+            } else {
+                setOnlineStatus('Unable to start a game with that friend right now.');
+            }
+        }
+    }
+
     function updateAuthUI() {
         if (authenticatedUser) {
             if (authButtonsContainer) {
@@ -177,6 +1009,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 authStatusText.textContent = '';
             }
         }
+        updateOnlineControlsState();
     }
 
     function setAuthenticatedUser(user) {
@@ -197,7 +1030,13 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (storageError) {
             console.error('Unable to persist authentication state', storageError);
         }
+        if (!normalizedUser) {
+            resetOnlineGameState();
+        }
         updateAuthUI();
+        if (normalizedUser && isOnlineMode()) {
+            pollForOnlineMatch(gameTypeSelect ? gameTypeSelect.value : 'standard').catch(() => {});
+        }
     }
 
     function restoreAuthentication() {
@@ -379,7 +1218,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (logoutButton) {
         logoutButton.addEventListener('click', () => {
+            cancelOnlineSearch().catch(() => {});
+            resetOnlineGameState();
             setAuthenticatedUser(null);
+            updateOnlineControlsState();
+        });
+    }
+
+    if (findOnlineMatchButton) {
+        findOnlineMatchButton.addEventListener('click', () => {
+            startOnlineMatchmaking();
+        });
+    }
+
+    if (cancelOnlineSearchButton) {
+        cancelOnlineSearchButton.addEventListener('click', () => {
+            cancelOnlineSearch();
+        });
+    }
+
+    if (playFriendButton) {
+        playFriendButton.addEventListener('click', () => {
+            startFriendGame();
+        });
+    }
+
+    if (friendUsernameInput) {
+        friendUsernameInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                startFriendGame();
+            }
         });
     }
 
@@ -758,6 +1627,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     gameModeSelect.addEventListener("change", () => {
+        const previousMode = gameMode;
         gameMode = gameModeSelect.value;
         zeroPlayerPaused = gameMode === 'zeroPlayer';
         if (playerColorSelect) {
@@ -769,6 +1639,20 @@ document.addEventListener("DOMContentLoaded", () => {
         updateCustomMixVisibility();
         updateZeroPlayerControlsState();
         updateBoardFlipModeVisibility();
+        if (previousMode === 'online' && gameMode !== 'online') {
+            cancelOnlineSearch().catch(() => {});
+            resetOnlineGameState();
+        }
+        updateOnlineControlsState();
+        if (gameMode === 'online') {
+            if (!isOnlineGameActive()) {
+                resetGame();
+                if (authenticatedUser) {
+                    pollForOnlineMatch(gameTypeSelect ? gameTypeSelect.value : 'standard').catch(() => {});
+                }
+            }
+            return;
+        }
         resetGame(); // Reset the game when switching modes
     });
 
@@ -1216,6 +2100,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (gameMode === 'zeroPlayer') {
             return 'w';
         }
+        if (gameMode === 'online') {
+            return onlineGameState.playerColor === 'b' ? 'b' : 'w';
+        }
         return 'w';
     }
 
@@ -1545,17 +2432,21 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
-    function getSetupForCurrentGameType() {
-        if (gameType === 'chess960') {
+    function getSetupForVariantName(variantName) {
+        if (variantName === 'chess960') {
             return createChess960Setup();
         }
-        if (gameType === 'custom') {
+        if (variantName === 'custom') {
             if (!customSetup) {
                 customSetup = createStandardSetup();
             }
             return cloneSetup(customSetup);
         }
         return createStandardSetup();
+    }
+
+    function getSetupForCurrentGameType() {
+        return getSetupForVariantName(gameType);
     }
 
     function inferLastMoveFromEnPassant(target, activeTurn) {
@@ -2309,6 +3200,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const square = event.currentTarget;
         const piece = square.querySelector(".piece");
+
+        if (isOnlineMode()) {
+            if (!isOnlineGameActive()) {
+                return;
+            }
+            if (onlineGameState.playerColor !== turn) {
+                return;
+            }
+        }
 
         if (isColorBotControlled(turn)) return; // Prevent player from moving when bots control the turn
 
@@ -3267,6 +4167,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         historyStates.push(captureDetailedState());
+        if (!suppressOnlineSync) {
+            handleOnlineMoveFinalized(moveDetails, notation, { isMate, drawReason });
+        }
         currentHistoryIndex = stateIndex;
         updateMoveHistoryUI();
         evaluateBoard();
@@ -3743,6 +4646,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateBotSelectionVisibility();
         updateCustomMixVisibility();
         updateBoardFlipModeVisibility();
+        updateOnlineControlsState();
     };
     const promotePawn = (pawn) => {
         const promotionUI = document.createElement('div');
