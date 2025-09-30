@@ -40,6 +40,7 @@
                 <option value="twoPlayer">Two Players</option>
                 <option value="onePlayer">One Player (vs. Bot)</option>
                 <option value="zeroPlayer">Zero Players (Bot vs. Bot)</option>
+                <option value="online">Online Multiplayer</option>
             </select>
         </div>
         <div class="settings-group" id="playerColorGroup" style="display: none;">
@@ -68,6 +69,17 @@
                 <option value="custom">Custom Setup</option>
             </select>
             <button id="editCustomSetupButton" type="button" class="custom-setup-button" style="display: none;">Edit Setup</button>
+        </div>
+        <div class="settings-group online-settings" id="onlineControls" style="display: none;">
+            <div class="online-actions">
+                <button type="button" id="findOnlineMatchButton" class="primary-action">Find Player</button>
+                <button type="button" id="cancelOnlineSearchButton" class="secondary" style="display: none;">Cancel Search</button>
+            </div>
+            <div class="online-friend">
+                <input type="text" id="friendUsernameInput" placeholder="Friend's username" aria-label="Friend username">
+                <button type="button" id="playFriendButton" class="secondary">Play Friend</button>
+            </div>
+            <div id="onlineStatusMessage" class="online-status-message" aria-live="polite"></div>
         </div>
     </div>
 

@@ -200,6 +200,77 @@ body.modal-open {
     flex-wrap: wrap;
 }
 
+button.primary-action {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #2f80ed;
+    background: #2f80ed;
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+button.primary-action:hover,
+button.primary-action:focus {
+    background: #1b63c5;
+    border-color: #1b63c5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.settings-group.online-settings button.secondary {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #bdbdbd;
+    background: #ffffff;
+    color: #424242;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.settings-group.online-settings button.secondary:hover,
+.settings-group.online-settings button.secondary:focus {
+    background: #f2f2f2;
+    border-color: #9e9e9e;
+}
+
+.settings-group.online-settings {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 360px;
+    width: 100%;
+}
+
+.online-actions,
+.online-friend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.online-friend input {
+    flex: 1;
+    min-width: 160px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    font-size: 14px;
+}
+
+.online-friend input:focus {
+    outline: none;
+    border-color: #2f80ed;
+    box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.15);
+}
+
+.online-status-message {
+    min-height: 18px;
+    font-size: 13px;
+    color: #424242;
+}
+
 #zeroPlayerControls {
     display: none;
 }
