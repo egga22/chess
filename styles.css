@@ -515,6 +515,18 @@ button.primary-action:focus {
     align-items: flex-start;
 }
 
+.engine-status-message {
+    max-width: 320px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #c0392b;
+    background: rgba(192, 57, 43, 0.12);
+    border-radius: 6px;
+    padding: 8px 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 #evalBar {
     width: 20px;
     height: 560px;

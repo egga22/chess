@@ -10,6 +10,10 @@ document.addEventListener("DOMContentLoaded", () => {
         w: document.querySelector('.bot-selection-group[data-color="w"]'),
         b: document.querySelector('.bot-selection-group[data-color="b"]')
     };
+    const selectIdToColor = {
+        whiteBotDifficulty: 'w',
+        blackBotDifficulty: 'b'
+    };
     const gameTypeSelect = document.getElementById('gameTypeSelect');
     const editCustomSetupButton = document.getElementById('editCustomSetupButton');
     const customSetupModal = document.getElementById('customSetupModal');
@@ -62,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const playFriendButton = document.getElementById('playFriendButton');
     const friendUsernameInput = document.getElementById('friendUsernameInput');
     const onlineStatusMessage = document.getElementById('onlineStatusMessage');
+    const engineStatusMessage = document.getElementById('engineStatusMessage');
     const restDbBaseUrlAttribute = pageBody && pageBody.dataset ? pageBody.dataset.restdbBaseUrl : '';
     const restDbAccountsCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbAccountsCollection || '') : '';
     const restDbUsersCollectionAttribute = pageBody && pageBody.dataset ? (pageBody.dataset.restdbUsersCollection || '') : '';
@@ -72,6 +77,13 @@ document.addEventListener("DOMContentLoaded", () => {
         accountsCollection: (restDbAccountsCollectionAttribute || restDbUsersCollectionAttribute || 'accounts').trim(),
         gamesCollection: (restDbGamesCollectionAttribute || 'games').trim(),
         apiKey: (restDbApiKeyAttribute || '68d6f8a9b349a33f8d4b70d8').trim()
+    };
+    const supportsSharedArrayBuffer = typeof SharedArrayBuffer === 'function';
+    const stockfishStatus = {
+        supported: supportsSharedArrayBuffer,
+        available: false,
+        errorMessage: supportsSharedArrayBuffer ? '' : 'Stockfish engine requires SharedArrayBuffer support. Enable cross-origin isolation or use a compatible browser to access Stockfish-powered features.',
+        hasLoggedUnavailableWarning: false
     };
     const AUTH_STORAGE_KEY = 'chess-auth-user';
     const REST_DB_NOT_CONFIGURED_ERROR = 'REST_DB_NOT_CONFIGURED';
@@ -160,8 +172,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const response = await fetch(requestUrl, fetchOptions);
         if (!response.ok) {
-            const error = new Error(`Request failed with status ${response.status}`);
+            let errorDetails = '';
+            let parsedDetails = null;
+            try {
+                const cloned = response.clone();
+                const bodyText = await cloned.text();
+                if (bodyText) {
+                    errorDetails = bodyText;
+                    try {
+                        parsedDetails = JSON.parse(bodyText);
+                    } catch (parseError) {
+                        parsedDetails = null;
+                    }
+                }
+            } catch (readError) {
+                parsedDetails = null;
+                errorDetails = '';
+            }
+
+            let errorMessage = `Request failed with status ${response.status}`;
+            if (parsedDetails && typeof parsedDetails.message === 'string' && parsedDetails.message.trim() !== '') {
+                errorMessage += `: ${parsedDetails.message.trim()}`;
+            } else if (errorDetails) {
+                const trimmed = errorDetails.trim();
+                if (trimmed) {
+                    errorMessage += `: ${trimmed}`;
+                }
+            }
+
+            console.error('REST DB request failed', {
+                url: requestUrl,
+                status: response.status,
+                details: parsedDetails || errorDetails || null
+            });
+
+            const error = new Error(errorMessage);
             error.response = response;
+            if (parsedDetails) {
+                error.details = parsedDetails;
+            } else if (errorDetails) {
+                error.details = errorDetails;
+            }
             throw error;
         }
         return response;
@@ -2232,8 +2283,61 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function getStockfishStatusMessage() {
+        if (stockfishStatus.supported && stockfishStatus.available && !stockfishStatus.errorMessage) {
+            return '';
+        }
+        if (!stockfishStatus.supported) {
+            return stockfishStatus.errorMessage || 'Stockfish features are unavailable because SharedArrayBuffer is not supported in this environment.';
+        }
+        return stockfishStatus.errorMessage || 'Stockfish engine failed to start. Engine-powered features are currently disabled.';
+    }
+
+    function updateStockfishAvailabilityUI() {
+        const disableStockfish = !stockfishStatus.supported || !stockfishStatus.available;
+        const statusMessage = getStockfishStatusMessage();
+
+        if (engineStatusMessage) {
+            if (disableStockfish && statusMessage) {
+                engineStatusMessage.textContent = statusMessage;
+                engineStatusMessage.classList.remove('hidden');
+            } else {
+                engineStatusMessage.textContent = '';
+                engineStatusMessage.classList.add('hidden');
+            }
+        }
+
+        const stockfishOptions = document.querySelectorAll('option[value="stockfish"]');
+        stockfishOptions.forEach(option => {
+            option.disabled = disableStockfish;
+            if (!disableStockfish || !option.selected) {
+                return;
+            }
+            const select = option.closest('select');
+            if (!select) {
+                return;
+            }
+            select.value = 'random';
+            const colorKey = selectIdToColor[select.id];
+            if (colorKey) {
+                botDifficulty[colorKey] = select.value;
+            }
+            updateCustomMixVisibility();
+            if (typeof evaluateBoard === 'function') {
+                evaluateBoard();
+            }
+        });
+
+        if (disableStockfish && typeof resetEvalBar === 'function') {
+            resetEvalBar();
+        }
+    }
+
     function isStockfishEvaluationEnabled() {
         if (gameType === 'chess960') {
+            return false;
+        }
+        if (!stockfishStatus.available) {
             return false;
         }
 
@@ -3462,7 +3566,43 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const initStockfish = () => {
-        engine = new Worker('stockfish.js');
+        if (!stockfishStatus.supported) {
+            engine = null;
+            stockfishStatus.available = false;
+            stockfishStatus.hasLoggedUnavailableWarning = false;
+            updateStockfishAvailabilityUI();
+            return;
+        }
+
+        try {
+            engine = new Worker('stockfish.js');
+            stockfishStatus.available = true;
+            stockfishStatus.errorMessage = '';
+            stockfishStatus.hasLoggedUnavailableWarning = false;
+        } catch (error) {
+            console.error('Unable to start Stockfish worker', error);
+            stockfishStatus.available = false;
+            stockfishStatus.errorMessage = error && error.message ? error.message : 'Failed to start Stockfish worker.';
+            stockfishStatus.hasLoggedUnavailableWarning = false;
+            engine = null;
+            updateStockfishAvailabilityUI();
+            return;
+        }
+
+        engine.addEventListener('error', event => {
+            stockfishStatus.available = false;
+            stockfishStatus.errorMessage = (event && (event.message || (event.error && event.error.message))) || 'Stockfish worker encountered an error.';
+            stockfishStatus.hasLoggedUnavailableWarning = false;
+            console.error('Stockfish worker error', event);
+            try {
+                engine.terminate();
+            } catch (terminateError) {
+                console.warn('Unable to terminate Stockfish worker cleanly', terminateError);
+            }
+            engine = null;
+            updateStockfishAvailabilityUI();
+        });
+
         engine.onmessage = (e) => {
             const line = e.data;
             const scoreMatch = line.match(/score (cp|mate) (-?\\d+)/);
@@ -3474,16 +3614,27 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateEvalBar(value, perspective);
                 }
             }
-            if (line.startsWith('bestmove') && engine.bestMoveCallback) {
+            if (line.startsWith('bestmove') && engine && engine.bestMoveCallback) {
                 const move = line.split(' ')[1];
                 engine.bestMoveCallback(move);
                 engine.bestMoveCallback = null;
             }
         };
+
+        updateStockfishAvailabilityUI();
     };
 
     const requestStockfish = (callback) => {
-        if (!engine) return;
+        if (!engine || !stockfishStatus.available) {
+            if (typeof callback === 'function') {
+                callback(null);
+            }
+            if (!stockfishStatus.available && stockfishStatus.errorMessage && !stockfishStatus.hasLoggedUnavailableWarning) {
+                console.warn('Stockfish unavailable:', stockfishStatus.errorMessage);
+                stockfishStatus.hasLoggedUnavailableWarning = true;
+            }
+            return;
+        }
         engine.bestMoveCallback = callback || null;
         const fen = generateFEN();
         const fenParts = fen.split(' ');
