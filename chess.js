@@ -78,6 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let authenticatedUser = null;
     const ONLINE_SEARCH_POLL_INTERVAL = 4000;
     const ONLINE_GAME_POLL_INTERVAL = 4000;
+    let gameMode = 'twoPlayer'; // Default game mode
 
     function createInitialOnlineGameState() {
         return {
@@ -1334,7 +1335,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let selectedPiece = null;
     let turn = 'w'; // 'w' for white, 'b' for black
     let lastMove = null; // To keep track of the last move
-    let gameMode = 'twoPlayer'; // Default game mode
     let playerColor = playerColorSelect ? (playerColorSelect.value === 'b' ? 'b' : 'w') : 'w';
     let boardOrientation = 'w';
     let boardFlipMode = boardFlipModeSelect ? (boardFlipModeSelect.value === 'entire' ? 'entire' : 'pieces') : 'pieces';
