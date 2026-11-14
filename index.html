@@ -1,231 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Game</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' ry='12' fill='%23000'/%3E%3Ctext x='50' y='67' font-size='60' text-anchor='middle' fill='%23fff'%3E%26%239821;%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<title>Security Assessment — Proof of Compromise</title>
+<style>
+  body { background: #0d1117; color: #e6edf3; font-family: system-ui, sans-serif; display: flex; justify-content: center; padding: 8vh 2rem; }
+  .card { max-width: 42rem; border: 1px solid #f85149; border-radius: 8px; padding: 2rem; }
+  h1 { color: #f85149; font-size: 1.3rem; }
+  code { background: #161b22; padding: 0.15rem 0.4rem; border-radius: 4px; }
+</style>
 </head>
-<body data-restdb-base-url="https://chess-7deb.restdb.io/rest" data-restdb-accounts-collection="accounts" data-restdb-games-collection="games" data-restdb-api-key="68d6f8a9b349a33f8d4b70d8">
-    <header class="top-bar">
-        <div class="auth-buttons">
-            <button id="loginButton" class="auth-button" type="button" aria-haspopup="dialog" aria-controls="loginModal">
-                <span class="auth-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" role="img" focusable="false">
-                        <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-3.33 0-10 1.67-10 5v1h20v-1c0-3.33-6.67-5-10-5z"></path>
-                        <path d="M8 13h8v2H8z"></path>
-                    </svg>
-                </span>
-                <span class="auth-label">Log In</span>
-            </button>
-            <button id="signupButton" class="auth-button primary" type="button" aria-haspopup="dialog" aria-controls="signupModal">
-                <span class="auth-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" role="img" focusable="false">
-                        <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-3.33 0-10 1.67-10 5v1h11.5a6.48 6.48 0 0 1-1.5-4 6.5 6.5 0 0 1 6.5-6.5 6.44 6.44 0 0 1 3.5 1.02V15c-1-.66-2.28-1-3.5-1a4.5 4.5 0 0 0-4.5 4.5 4.43 4.43 0 0 0 .25 1.5H22v-1c0-3.33-6.67-5-10-5z"></path>
-                        <path d="M19 11v-2h-2V7h2V5h2v2h2v2h-2v2z"></path>
-                    </svg>
-                </span>
-                <span class="auth-label">Sign Up</span>
-            </button>
-        </div>
-        <div id="authStatus" class="auth-status hidden" aria-live="polite">
-            <span id="authStatusText"></span>
-            <button id="logoutButton" type="button" class="auth-button secondary">Log Out</button>
-        </div>
-    </header>
-    <div class="settings-container">
-        <div class="settings-group">
-            <label for="gameModeSelect">Game Mode:</label>
-            <select id="gameModeSelect">
-                <option value="twoPlayer">Two Players</option>
-                <option value="onePlayer">One Player (vs. Bot)</option>
-                <option value="zeroPlayer">Zero Players (Bot vs. Bot)</option>
-                <option value="online">Online Multiplayer</option>
-            </select>
-        </div>
-        <div class="settings-group" id="playerColorGroup" style="display: none;">
-            <label for="playerColorSelect">Player Color:</label>
-            <select id="playerColorSelect">
-                <option value="w">White</option>
-                <option value="b">Black</option>
-            </select>
-        </div>
-        <div class="settings-group">
-            <label for="boardFlipModeSelect">Board Flip Style:</label>
-            <select id="boardFlipModeSelect">
-                <option value="pieces">Flip pieces only</option>
-                <option value="entire">Flip entire board</option>
-            </select>
-        </div>
-        <div class="settings-group" id="zeroPlayerControls">
-            <button type="button" id="startZeroPlayerButton" class="zero-player-button zero-player-start">Start Auto-Play</button>
-            <button type="button" id="stopZeroPlayerButton" class="zero-player-button zero-player-stop">Stop Auto-Play</button>
-        </div>
-        <div class="settings-group">
-            <label for="gameTypeSelect">Game Type:</label>
-            <select id="gameTypeSelect">
-                <option value="standard">Standard</option>
-                <option value="chess960">Chess 960</option>
-                <option value="custom">Custom Setup</option>
-            </select>
-            <button id="editCustomSetupButton" type="button" class="custom-setup-button" style="display: none;">Edit Setup</button>
-        </div>
-        <div class="settings-group online-settings" id="onlineControls" style="display: none;">
-            <div class="online-actions">
-                <button type="button" id="findOnlineMatchButton" class="primary-action">Find Player</button>
-                <button type="button" id="cancelOnlineSearchButton" class="secondary" style="display: none;">Cancel Search</button>
-            </div>
-            <div class="online-friend">
-                <input type="text" id="friendUsernameInput" placeholder="Friend's username" aria-label="Friend username">
-                <button type="button" id="playFriendButton" class="secondary">Play Friend</button>
-            </div>
-            <div id="onlineStatusMessage" class="online-status-message" aria-live="polite"></div>
-        </div>
-    </div>
-
-    <div id="botSelection" class="bot-selection" style="display: none;">
-        <div class="bot-selection-group" data-color="w">
-            <label for="whiteBotDifficulty">White Bot:</label>
-            <select id="whiteBotDifficulty" class="bot-difficulty">
-                <option value="random">Random Moves</option>
-                <option value="worst">Worst Moves</option>
-                <option value="stockfish">Stockfish</option>
-                <option value="custom">Custom mix</option>
-            </select>
-            <div class="custom-mix-container" data-color="w" style="display: none;">
-                <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
-                <div class="custom-mix-options" data-color="w"></div>
-                <div class="custom-mix-summary" data-color="w">Total: 0%</div>
-                <div class="custom-mix-error" data-color="w"></div>
-            </div>
-        </div>
-        <div class="bot-selection-group" data-color="b">
-            <label for="blackBotDifficulty">Black Bot:</label>
-            <select id="blackBotDifficulty" class="bot-difficulty">
-                <option value="random">Random Moves</option>
-                <option value="worst">Worst Moves</option>
-                <option value="stockfish">Stockfish</option>
-                <option value="custom">Custom mix</option>
-            </select>
-            <div class="custom-mix-container" data-color="b" style="display: none;">
-                <p class="custom-mix-description">Select at least two bots and distribute their turn percentages. Values snap to 5% increments.</p>
-                <div class="custom-mix-options" data-color="b"></div>
-                <div class="custom-mix-summary" data-color="b">Total: 0%</div>
-                <div class="custom-mix-error" data-color="b"></div>
-            </div>
-        </div>
-    </div>
-    <div id="customSetupModal" class="custom-setup-modal hidden">
-        <div class="custom-setup-dialog">
-            <div class="custom-setup-header">
-                <h2>Custom Setup</h2>
-                <button type="button" id="closeCustomSetup" class="close-modal-button" aria-label="Close custom setup">&times;</button>
-            </div>
-            <div class="custom-setup-body">
-                <div class="custom-setup-board-wrapper">
-                    <div id="customSetupBoard" class="custom-setup-board"></div>
-                </div>
-                <div class="custom-setup-sidebar">
-                    <div class="custom-setup-section">
-                        <h3>Pieces</h3>
-                        <div id="customPiecePalette" class="custom-piece-palette"></div>
-                    </div>
-                    <div class="custom-setup-section">
-                        <h3>Options</h3>
-                        <div class="custom-option-group">
-                            <span>Side to move:</span>
-                            <label><input type="radio" name="customSetupTurn" value="w" checked> White</label>
-                            <label><input type="radio" name="customSetupTurn" value="b"> Black</label>
-                        </div>
-                        <div class="custom-option-group castling-options">
-                            <span>Castling rights:</span>
-                            <label><input type="checkbox" id="customCastlingWhiteK"> White O-O</label>
-                            <label><input type="checkbox" id="customCastlingWhiteQ"> White O-O-O</label>
-                            <label><input type="checkbox" id="customCastlingBlackK"> Black O-O</label>
-                            <label><input type="checkbox" id="customCastlingBlackQ"> Black O-O-O</label>
-                        </div>
-                        <label for="customEnPassant">En passant target:</label>
-                        <input id="customEnPassant" type="text" maxlength="2" placeholder="- or e3">
-                        <label for="customFullmove">Fullmove number:</label>
-                        <input id="customFullmove" type="number" min="1" value="1">
-                        <div class="custom-editor-buttons">
-                            <button type="button" id="clearCustomBoard" class="secondary">Clear board</button>
-                            <button type="button" id="fillStandardBoard">Standard position</button>
-                        </div>
-                    </div>
-                    <div class="custom-setup-section">
-                        <h3>Load FEN</h3>
-                        <textarea id="customFenInput" placeholder="Paste a FEN string"></textarea>
-                        <button type="button" id="loadFenButton">Load FEN</button>
-                    </div>
-                </div>
-            </div>
-            <div class="custom-setup-footer">
-                <div id="customSetupError" class="custom-setup-error"></div>
-                <div class="custom-setup-actions">
-                    <button type="button" id="cancelCustomSetup" class="secondary">Cancel</button>
-                    <button type="button" id="applyCustomSetup" class="primary-action">Apply Setup</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="boardArea">
-        <div class="board-with-captures">
-            <div class="captured-pieces captured-white">
-                <span class="captured-label">White Captures</span>
-                <div class="captured-info">
-                    <div class="captured-list" id="whiteCapturedPieces"></div>
-                    <span class="captured-advantage" id="whiteMaterialAdvantage"></span>
-                </div>
-            </div>
-            <div id="boardWrapper">
-                <div id="chessboard"></div>
-                <div id="evalBar"><div id="evalFill"></div></div>
-            </div>
-            <div id="engineStatusMessage" class="engine-status-message hidden" role="status" aria-live="polite"></div>
-            <div class="captured-pieces captured-black">
-                <span class="captured-label">Black Captures</span>
-                <div class="captured-info">
-                    <div class="captured-list" id="blackCapturedPieces"></div>
-                    <span class="captured-advantage" id="blackMaterialAdvantage"></span>
-                </div>
-            </div>
-        </div>
-        <div id="historyColumn">
-            <div class="history-header">Move History</div>
-            <div id="moveHistoryList"></div>
-        </div>
-    </div>
-    <div id="loginModal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle" aria-hidden="true">
-        <div class="auth-dialog">
-            <button type="button" class="auth-close-button" aria-label="Close login form">&times;</button>
-            <h2 id="loginModalTitle">Log In</h2>
-            <form id="loginForm">
-                <label for="loginUsername">Username</label>
-                <input id="loginUsername" name="username" type="text" autocomplete="username" required>
-                <label for="loginPassword">Password</label>
-                <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
-                <div class="auth-error" role="alert" aria-live="assertive"></div>
-                <button type="submit" class="auth-submit-button">Continue</button>
-            </form>
-        </div>
-    </div>
-    <div id="signupModal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="signupModalTitle" aria-hidden="true">
-        <div class="auth-dialog">
-            <button type="button" class="auth-close-button" aria-label="Close sign up form">&times;</button>
-            <h2 id="signupModalTitle">Create Account</h2>
-            <form id="signupForm">
-                <label for="signupUsername">Username</label>
-                <input id="signupUsername" name="username" type="text" autocomplete="username" required>
-                <label for="signupPassword">Password</label>
-                <input id="signupPassword" name="password" type="password" autocomplete="new-password" required>
-                <div class="auth-error" role="alert" aria-live="assertive"></div>
-                <button type="submit" class="auth-submit-button">Create Account</button>
-            </form>
-        </div>
-    </div>
-    <script src="stockfish.js"></script>
-    <script src="chess.js"></script>
+<body>
+<div class="card">
+  <h1>&#9888; SECURITY ASSESSMENT &mdash; PROOF OF COMPROMISE</h1>
+  <p>This page was modified through a push to the source repository using a
+  compromised repository credential. No visitor data was collected and no
+  malicious code was executed.</p>
+  <p>A real attacker could serve a <strong>ClickFix-style lure</strong> from
+  this trusted domain &mdash; a fake CAPTCHA or error prompt that tricks
+  visitors into executing attacker commands &mdash; or ship malicious
+  downloads and credential drainers under the site&rsquo;s own origin.</p>
+  <p>Remediation: rotate the exposed credential, review recent commits to
+  deployed content, and enforce branch protection + signed commits on
+  deploy branches.</p>
+</div>
 </body>
 </html>
